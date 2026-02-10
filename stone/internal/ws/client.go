@@ -2,40 +2,62 @@ package ws
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+
+	"github.com/pulse/stone/internal/middleware"
 )
 
 const (
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	writeWait  = 10 * time.Second
+	pongWait   = 60 * time.Second
+	pingPeriod = (pongWait * 9) / 10
+
+	// defaultMaxMessageSize is used when no explicit size is provided.
+	defaultMaxMessageSize int64 = 4096
 )
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub           *Hub
-	conn          *websocket.Conn
-	send          chan *OutgoingMessage
-	userID        uuid.UUID
-	canAccessRoom func(roomID string) bool
+	hub            *Hub
+	conn           *websocket.Conn
+	send           chan *OutgoingMessage
+	userID         uuid.UUID
+	canAccessRoom  func(roomID string) bool
+	maxMessageSize int64
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID, canAccessRoom func(roomID string) bool) *Client {
+// ClientOption configures optional Client parameters.
+type ClientOption func(*Client)
+
+// WithMaxMessageSize sets the maximum inbound WebSocket message size in bytes.
+func WithMaxMessageSize(size int64) ClientOption {
+	return func(c *Client) {
+		if size > 0 {
+			c.maxMessageSize = size
+		}
+	}
+}
+
+func NewClient(hub *Hub, conn *websocket.Conn, userID uuid.UUID, canAccessRoom func(roomID string) bool, opts ...ClientOption) *Client {
 	if canAccessRoom == nil {
 		canAccessRoom = func(string) bool { return false }
 	}
-	return &Client{
-		hub:           hub,
-		conn:          conn,
-		send:          make(chan *OutgoingMessage, 256),
-		userID:        userID,
-		canAccessRoom: canAccessRoom,
+	c := &Client{
+		hub:            hub,
+		conn:           conn,
+		send:           make(chan *OutgoingMessage, 256),
+		userID:         userID,
+		canAccessRoom:  canAccessRoom,
+		maxMessageSize: defaultMaxMessageSize,
 	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 func (c *Client) UserID() uuid.UUID {
@@ -46,10 +68,11 @@ func (c *Client) UserID() uuid.UUID {
 func (c *Client) ReadPump() {
 	defer func() {
 		c.hub.unregister <- c
+		middleware.WSConnectionClosed()
 		c.conn.Close()
 	}()
 
-	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadLimit(c.maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
@@ -60,7 +83,7 @@ func (c *Client) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("ws error: %v", err)
+				slog.Warn("ws unexpected close", "error", err, "user_id", c.userID)
 			}
 			break
 		}
@@ -113,5 +136,6 @@ func (c *Client) WritePump() {
 
 // Register registers the client with the hub.
 func (c *Client) Register() {
+	middleware.WSConnectionOpened()
 	c.hub.register <- c
 }

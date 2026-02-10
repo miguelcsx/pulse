@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +18,13 @@ func Logger() gin.HandlerFunc {
 		status := c.Writer.Status()
 		reqID, _ := c.Get("request_id")
 
-		log.Printf("[%s] %s %s %d %v",
-			reqID, c.Request.Method, path, status, latency)
+		slog.Info("request",
+			"request_id", reqID,
+			"method", c.Request.Method,
+			"path", path,
+			"status", status,
+			"latency", latency,
+			"client_ip", c.ClientIP(),
+		)
 	}
 }

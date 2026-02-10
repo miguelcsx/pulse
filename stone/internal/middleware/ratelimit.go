@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func RateLimit(rdb *redis.Client, rps int, burst int) gin.HandlerFunc {
+func RateLimit(rdb *redis.Client, rps int, burst int, failOpen bool) gin.HandlerFunc {
 	if rps <= 0 {
 		rps = 1
 	}
@@ -33,8 +34,14 @@ func RateLimit(rdb *redis.Client, rps int, burst int) gin.HandlerFunc {
 
 		count, err := rdb.Incr(ctx, key).Result()
 		if err != nil {
-			// If Redis is down, allow the request
-			c.Next()
+			slog.Warn("rate limiter redis error", "error", err, "client_ip", c.ClientIP())
+			if failOpen {
+				c.Next()
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error": "service temporarily unavailable",
+			})
 			return
 		}
 
