@@ -10,6 +10,7 @@ import (
 
 	"github.com/pulse/stone/internal/middleware"
 	"github.com/pulse/stone/internal/model"
+	// model.IsValidReactionKind used for reaction validation
 )
 
 func (s *Server) CreateContent(c *gin.Context) {
@@ -152,12 +153,8 @@ func (s *Server) ReactToContent(c *gin.Context) {
 		return
 	}
 
-	// Validate reaction kind
-	validKinds := map[string]bool{
-		"gave_me_energy": true, "calmed_me": true, "on_repeat": true,
-		"surprised_me": true, "my_aesthetic": true,
-	}
-	if !validKinds[req.Kind] {
+	// Validate reaction kind against the single source of truth.
+	if !model.IsValidReactionKind(req.Kind) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reaction kind"})
 		return
 	}

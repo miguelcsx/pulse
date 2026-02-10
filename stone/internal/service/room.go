@@ -12,23 +12,33 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/model"
 )
 
 // RoomService handles mood room lifecycle.
 type RoomService struct {
-	db *gorm.DB
+	db  *gorm.DB
+	cfg *config.Config
 }
 
 var ErrRoomNotFoundOrExpired = errors.New("room not found or expired")
 
 // NewRoomService creates a new RoomService.
-func NewRoomService(db *gorm.DB) *RoomService {
-	return &RoomService{db: db}
+func NewRoomService(db *gorm.DB, cfg *config.Config) *RoomService {
+	return &RoomService{db: db, cfg: cfg}
+}
+
+// roomTTL returns the configured room time-to-live duration.
+func (s *RoomService) roomTTL() time.Duration {
+	if s.cfg != nil && s.cfg.RoomTTL > 0 {
+		return s.cfg.RoomTTL
+	}
+	return 24 * time.Hour
 }
 
 // FindOrCreateByTags finds an existing room matching the given tag set and date bucket,
-// or creates a new one with a 24-hour TTL.
+// or creates a new one with the configured TTL.
 func (s *RoomService) FindOrCreateByTags(tagIDs []uuid.UUID) (*model.Room, error) {
 	if len(tagIDs) == 0 {
 		return nil, fmt.Errorf("at least one tag is required")
@@ -49,10 +59,10 @@ func (s *RoomService) FindOrCreateByTags(tagIDs []uuid.UUID) (*model.Room, error
 		return nil, fmt.Errorf("failed to find room: %w", err)
 	}
 
-	// Create a new room.
+	// Create a new room with configurable TTL.
 	room = model.Room{
 		ClusterKey: clusterKey,
-		ExpiresAt:  time.Now().Add(24 * time.Hour),
+		ExpiresAt:  time.Now().Add(s.roomTTL()),
 	}
 
 	err = s.db.Transaction(func(tx *gorm.DB) error {

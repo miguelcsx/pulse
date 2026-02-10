@@ -24,6 +24,7 @@ func NewFeedService(db *gorm.DB) *FeedService {
 // GetFeed returns content from followed users and the user's own content,
 // using cursor-based pagination by (created_at,id).
 // Default limit is 20, max is 50.
+// Block filtering uses NOT EXISTS for optimal query performance.
 func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]model.Content, string, bool, error) {
 	if limit <= 0 {
 		limit = 20
@@ -32,21 +33,16 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]mod
 		limit = 50
 	}
 
-	// Build the set of user IDs to include: the user + everyone they follow.
-	blockedByViewer := s.db.Model(&model.Block{}).
-		Select("blocked_id").
-		Where("blocker_id = ?", userID)
-	blockingViewer := s.db.Model(&model.Block{}).
-		Select("blocker_id").
-		Where("blocked_id = ?", userID)
-
 	query := s.db.Preload("Creator").Preload("Tags").
-		Where("creator_id = ? OR creator_id IN (?)",
-			userID,
-			s.db.Model(&model.Follow{}).Select("followee_id").Where("follower_id = ?", userID),
-		).
-		Where("creator_id NOT IN (?)", blockedByViewer).
-		Where("creator_id NOT IN (?)", blockingViewer).
+		Where(`(creator_id = ? OR creator_id IN (
+			SELECT followee_id FROM follows WHERE follower_id = ?
+		))`, userID, userID).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = contents.creator_id
+		)`, userID).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = contents.creator_id
+		)`, userID).
 		Order("created_at DESC, id DESC").
 		Limit(limit + 1)
 

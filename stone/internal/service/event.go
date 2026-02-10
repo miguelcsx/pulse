@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/model"
 )
 
@@ -24,7 +25,8 @@ type EventInput struct {
 
 // EventService handles analytics event recording.
 type EventService struct {
-	db *gorm.DB
+	db  *gorm.DB
+	cfg *config.Config
 }
 
 var ErrInvalidEventInput = errors.New("invalid event input")
@@ -35,40 +37,9 @@ type affinitySignal struct {
 	delta      float64
 }
 
-const (
-	affinityHalfLife7DDays  = 3.0
-	affinityHalfLife30DDays = 14.0
-)
-
-var allowedEventTypes = map[string]struct{}{
-	"view":          {},
-	"dwell":         {},
-	"skip":          {},
-	"replay":        {},
-	"save":          {},
-	"reaction":      {},
-	"path_follow":   {},
-	"path_followed": {},
-	"follow_path":   {},
-	"tag_explore":   {},
-	"tag_open":      {},
-	"enter_room":    {},
-	"room_entered":  {},
-	"follow":        {},
-}
-
-var allowedTargetTypes = map[string]struct{}{
-	"":        {},
-	"user":    {},
-	"content": {},
-	"path":    {},
-	"room":    {},
-	"tag":     {},
-}
-
 // NewEventService creates a new EventService.
-func NewEventService(db *gorm.DB) *EventService {
-	return &EventService{db: db}
+func NewEventService(db *gorm.DB, cfg *config.Config) *EventService {
+	return &EventService{db: db, cfg: cfg}
 }
 
 // RecordBatch inserts a batch of analytics events for a given user.
@@ -114,7 +85,7 @@ func (s *EventService) RecordBatch(userID uuid.UUID, events []EventInput) error 
 			Metadata:   metadata,
 		})
 
-		delta := implicitSignalFromEvent(eventType, metadata)
+		delta := s.implicitSignalFromEvent(eventType, metadata)
 		if delta != 0 && targetID != nil {
 			signals = append(signals, affinitySignal{
 				targetType: targetType,
@@ -227,8 +198,11 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 		return nil
 	}
 
-	lambda7 := math.Ln2 / (affinityHalfLife7DDays * 24 * 60 * 60)
-	lambda30 := math.Ln2 / (affinityHalfLife30DDays * 24 * 60 * 60)
+	halfLife7D := s.cfg.AffinityHalfLife7DDays
+	halfLife30D := s.cfg.AffinityHalfLife30DDays
+
+	lambda7 := math.Ln2 / (halfLife7D * 24 * 60 * 60)
+	lambda30 := math.Ln2 / (halfLife30D * 24 * 60 * 60)
 
 	if delta > 0 {
 		if err := tx.Exec(`
@@ -284,7 +258,10 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 	return nil
 }
 
-func implicitSignalFromEvent(eventType string, metadata string) float64 {
+// implicitSignalFromEvent computes the affinity signal weight for an event,
+// using config-driven weights for static types and dynamic calculation for
+// dwell/view/skip based on metadata.
+func (s *EventService) implicitSignalFromEvent(eventType string, metadata string) float64 {
 	typ := strings.ToLower(strings.TrimSpace(eventType))
 	switch typ {
 	case "view", "dwell":
@@ -295,22 +272,8 @@ func implicitSignalFromEvent(eventType string, metadata string) float64 {
 		atMS := metadataNumber(metadata, "at_ms")
 		penalty := 1.0 - (atMS / 2000.0)
 		return -clamp(penalty, 0, 1.0)
-	case "replay":
-		return 1.0
-	case "save":
-		return 1.5
-	case "reaction":
-		return 1.2
-	case "path_follow", "path_followed", "follow_path":
-		return 2.0
-	case "tag_explore", "tag_open":
-		return 0.4
-	case "enter_room", "room_entered":
-		return 0.2
-	case "follow":
-		return 1.8
 	default:
-		return 0
+		return s.cfg.SignalWeight(typ)
 	}
 }
 
@@ -350,12 +313,12 @@ func clamp(v, minV, maxV float64) float64 {
 
 func normalizeEventContract(eventType, targetType string) (string, string, error) {
 	normalizedType := strings.ToLower(strings.TrimSpace(eventType))
-	if _, ok := allowedEventTypes[normalizedType]; !ok {
+	if !model.IsValidEventType(normalizedType) {
 		return "", "", fmt.Errorf("unsupported event type %q", eventType)
 	}
 
 	normalizedTarget := strings.ToLower(strings.TrimSpace(targetType))
-	if _, ok := allowedTargetTypes[normalizedTarget]; !ok {
+	if !model.IsValidTargetType(normalizedTarget) {
 		return "", "", fmt.Errorf("unsupported target type %q", targetType)
 	}
 

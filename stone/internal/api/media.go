@@ -1,16 +1,17 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
 	"github.com/pulse/stone/internal/middleware"
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/service"
 )
 
 type initMediaUploadRequest struct {
@@ -64,23 +65,16 @@ func (s *Server) UploadMediaBinary(c *gin.Context) {
 
 	asset, err := s.mediaService.UploadBinary(assetID, userID, c.Request.Body, contentLength)
 	if err != nil {
-		if strings.Contains(err.Error(), "not uploadable") {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		if strings.Contains(err.Error(), "failed to find media asset") {
+		switch {
+		case errors.Is(err, service.ErrMediaNotUploadable):
+			c.JSON(http.StatusConflict, gin.H{"error": "media asset is not uploadable"})
+		case errors.Is(err, service.ErrMediaAssetNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": "media asset not found"})
-			return
+		case errors.Is(err, service.ErrMediaTooLarge):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file exceeds declared size"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload media"})
 		}
-		if strings.Contains(err.Error(), "larger than declared") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		if strings.Contains(err.Error(), "http: request body too large") {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "payload too large"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to upload media"})
 		return
 	}
 

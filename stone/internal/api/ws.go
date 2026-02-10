@@ -46,7 +46,7 @@ func (s *Server) HandleWebSocket(c *gin.Context) {
 	client := ws.NewClient(s.hub, conn, parsed.UserID, func(roomID string) bool {
 		ok, err := s.roomService.IsActiveMember(roomID, parsed.UserID)
 		return err == nil && ok
-	})
+	}, ws.WithMaxMessageSize(s.cfg.WSMaxMessageSize))
 	client.Register()
 
 	go client.WritePump()

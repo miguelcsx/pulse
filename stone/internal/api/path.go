@@ -12,9 +12,9 @@ import (
 )
 
 type createPathRequest struct {
-	Title       string              `json:"title" binding:"required"`
-	Description string              `json:"description"`
-	Items       []pathItemInput     `json:"items" binding:"required,min=1"`
+	Title       string          `json:"title" binding:"required"`
+	Description string          `json:"description"`
+	Items       []pathItemInput `json:"items" binding:"required,min=1"`
 }
 
 type pathItemInput struct {
@@ -102,4 +102,19 @@ func (s *Server) FollowPath(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "following path"})
+}
+
+func (s *Server) UnfollowPath(c *gin.Context) {
+	pathID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path id"})
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	if err := s.pathService.Unfollow(pathID, userID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "unfollowed path"})
 }

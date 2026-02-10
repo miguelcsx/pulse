@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
@@ -39,7 +40,7 @@ func NewServer(cfg *config.Config, db *gorm.DB, rdb *redis.Client, storage store
 	hub := ws.NewHub()
 	go hub.Run()
 
-	tagSvc := service.NewTagService(db)
+	tagSvc := service.NewTagService(db, rdb, cfg.TagCacheTTL)
 	mediaSvc := service.NewMediaService(db, storage)
 
 	s := &Server{
@@ -49,20 +50,20 @@ func NewServer(cfg *config.Config, db *gorm.DB, rdb *redis.Client, storage store
 		storage: storage,
 		hub:     hub,
 
-		authService:     service.NewAuthService(db, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL),
+		authService:     service.NewAuthService(db, rdb, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.LoginMaxAttempts, cfg.LoginLockoutDuration),
 		userService:     service.NewUserService(db),
 		tagService:      tagSvc,
 		contentService:  service.NewContentService(db, storage, tagSvc, mediaSvc),
 		feedService:     service.NewFeedService(db),
 		affinityService: service.NewAffinityService(db),
 		followService:   service.NewFollowService(db),
-		roomService:     service.NewRoomService(db),
+		roomService:     service.NewRoomService(db, cfg),
 		pathService:     service.NewPathService(db),
-		eventService:    service.NewEventService(db),
+		eventService:    service.NewEventService(db, cfg),
 		mediaService:    mediaSvc,
 	}
 
-	if cfg.Env == "production" {
+	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -74,6 +75,12 @@ func NewServer(cfg *config.Config, db *gorm.DB, rdb *redis.Client, storage store
 	s.router = r
 	s.setupRoutes()
 	return s
+}
+
+// MediaService returns the media service for use by the caller (e.g. for
+// graceful shutdown and scheduler wiring).
+func (s *Server) MediaService() *service.MediaService {
+	return s.mediaService
 }
 
 func (s *Server) Router() *gin.Engine {
@@ -102,9 +109,15 @@ func (s *Server) setupRoutes() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
-	r.Use(middleware.SecureHeaders())
+	r.Use(middleware.SecureHeadersWithEnv(s.cfg.Env))
 	r.Use(middleware.CORS(s.cfg.CORSOrigins))
-	r.Use(middleware.RateLimit(s.redis, s.cfg.RateLimitRPS, s.cfg.RateLimitBurst))
+	r.Use(middleware.RateLimit(s.redis, s.cfg.RateLimitRPS, s.cfg.RateLimitBurst, s.cfg.RateLimitFailOpen))
+
+	// Prometheus metrics middleware and endpoint
+	if s.cfg.MetricsEnabled {
+		r.Use(middleware.Metrics())
+		r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	}
 
 	// Serve uploaded files
 	r.Static(s.cfg.UploadPublicPath, s.cfg.StoragePath)
@@ -171,6 +184,7 @@ func (s *Server) setupRoutes() {
 			protected.GET("/paths", s.ListPaths)
 			protected.GET("/paths/:id", s.GetPath)
 			protected.POST("/paths/:id/follow", s.FollowPath)
+			protected.DELETE("/paths/:id/follow", s.UnfollowPath)
 
 			// Events
 			protected.POST("/events", s.RecordEvents)

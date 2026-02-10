@@ -74,12 +74,16 @@ func (s *AffinityService) GetSuggestions(userID uuid.UUID, limit int) ([]Suggest
 				return fmt.Errorf("failed to get common tags for user %s: %w", r.ID, err)
 			}
 
+			// Filter tags for bridge privacy: exclude very niche tags
+			// that could reveal personal interests.
+			bridgeTags := filterBridgeTags(commonTags)
+
 			sharedTags := r.SharedTags
 			if sharedTags == 0 {
 				sharedTags = len(commonTags)
 			}
-			bridge := buildBridge(commonTags, sharedTags)
-			if len(commonTags) == 0 && r.AffinityScore > 0 {
+			bridge := buildBridge(bridgeTags, sharedTags)
+			if len(bridgeTags) == 0 && r.AffinityScore > 0 {
 				bridge = "You have similar viewing patterns"
 			}
 
@@ -119,38 +123,45 @@ func (s *AffinityService) GetSuggestions(userID uuid.UUID, limit int) ([]Suggest
 	return results, nil
 }
 
+// getEdgeRows retrieves suggestion candidates from pre-computed affinity edges.
+// Uses NOT EXISTS instead of NOT IN for optimal query performance.
 func (s *AffinityService) getEdgeRows(userID uuid.UUID, limit int) ([]suggestionRow, error) {
-	blockedByViewer := s.db.Model(&model.Block{}).
-		Select("blocked_id").
-		Where("blocker_id = ?", userID)
-	blockingViewer := s.db.Model(&model.Block{}).
-		Select("blocker_id").
-		Where("blocked_id = ?", userID)
-
 	var rows []suggestionRow
-	err := s.db.Table("user_affinity_edges e").
-		Select("u.id, u.handle, u.display_name, u.avatar_url, u.bio, 0 as shared_tags, e.score_30d as affinity_score").
-		Joins("JOIN users u ON u.id = e.other_user_id").
-		Where("e.user_id = ?", userID).
-		Where("u.id != ?", userID).
-		Where("e.score_30d > 0").
-		Where("u.id NOT IN (?)", s.db.Model(&model.Follow{}).Select("followee_id").Where("follower_id = ?", userID)).
-		Where("u.id NOT IN (?)", blockedByViewer).
-		Where("u.id NOT IN (?)", blockingViewer).
-		Order("e.score_30d DESC, e.updated_at DESC").
-		Limit(limit).
-		Scan(&rows).Error
+	err := s.db.Raw(`
+		SELECT u.id, u.handle, u.display_name, u.avatar_url, u.bio,
+		       0 AS shared_tags,
+		       e.score_30d AS affinity_score
+		FROM user_affinity_edges e
+		JOIN users u ON u.id = e.other_user_id
+		WHERE e.user_id = ?
+		  AND u.id != ?
+		  AND e.score_30d > 0
+		  AND NOT EXISTS (
+		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = u.id
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = u.id
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = u.id
+		  )
+		ORDER BY e.score_30d DESC, e.updated_at DESC
+		LIMIT ?
+	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}
 	return rows, nil
 }
 
+// getTagOverlapRows retrieves suggestion candidates based on shared tag usage.
+// Uses NOT EXISTS instead of NOT IN for optimal query performance.
 func (s *AffinityService) getTagOverlapRows(userID uuid.UUID, limit int) ([]suggestionRow, error) {
-	query := `
+	var rows []suggestionRow
+	err := s.db.Raw(`
 		SELECT u.id, u.handle, u.display_name, u.avatar_url, u.bio,
-		       COUNT(DISTINCT ct.tag_id) as shared_tags,
-		       0.0 as affinity_score
+		       COUNT(DISTINCT ct.tag_id) AS shared_tags,
+		       0.0 AS affinity_score
 		FROM users u
 		JOIN contents c ON c.creator_id = u.id
 		JOIN content_tags ct ON ct.content_id = c.id
@@ -160,16 +171,20 @@ func (s *AffinityService) getTagOverlapRows(userID uuid.UUID, limit int) ([]sugg
 			WHERE c2.creator_id = ?
 		)
 		  AND u.id != ?
-		  AND u.id NOT IN (SELECT followee_id FROM follows WHERE follower_id = ?)
-		  AND u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ?)
-		  AND u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = ?)
+		  AND NOT EXISTS (
+		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = u.id
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = u.id
+		  )
+		  AND NOT EXISTS (
+		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = u.id
+		  )
 		GROUP BY u.id, u.handle, u.display_name, u.avatar_url, u.bio
 		ORDER BY shared_tags DESC, u.created_at DESC
 		LIMIT ?
-	`
-
-	var rows []suggestionRow
-	if err := s.db.Raw(query, userID, userID, userID, userID, userID, limit).Scan(&rows).Error; err != nil {
+	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
+	if err != nil {
 		return nil, err
 	}
 	return rows, nil
@@ -197,6 +212,19 @@ func (s *AffinityService) getCommonTags(userA, userB uuid.UUID) ([]model.Tag, er
 		return nil, err
 	}
 	return tags, nil
+}
+
+// filterBridgeTags removes tags with very low usage counts from bridge
+// explanations to protect user privacy. Tags that are used by only a few
+// people could inadvertently reveal very specific personal interests.
+func filterBridgeTags(tags []model.Tag) []model.Tag {
+	filtered := make([]model.Tag, 0, len(tags))
+	for _, t := range tags {
+		if t.UsageCount >= model.BridgeMinTagUsage {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
 }
 
 // buildBridge creates a human-readable explanation for why two users are connected.

@@ -1,12 +1,15 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -17,24 +20,37 @@ import (
 
 // AuthService handles user registration, login, and JWT token management.
 type AuthService struct {
-	db         *gorm.DB
-	jwtSecret  string
-	accessTTL  time.Duration
-	refreshTTL time.Duration
+	db              *gorm.DB
+	rdb             *redis.Client
+	jwtSecret       string
+	accessTTL       time.Duration
+	refreshTTL      time.Duration
+	maxAttempts     int
+	lockoutDuration time.Duration
 }
 
 var (
 	ErrInvalidCredentials  = errors.New("invalid credentials")
 	ErrInvalidRefreshToken = errors.New("invalid refresh token")
+	ErrAccountLocked       = errors.New("account temporarily locked due to too many failed login attempts")
 )
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *gorm.DB, jwtSecret string, accessTTL, refreshTTL time.Duration) *AuthService {
+func NewAuthService(db *gorm.DB, rdb *redis.Client, jwtSecret string, accessTTL, refreshTTL time.Duration, maxAttempts int, lockoutDuration time.Duration) *AuthService {
+	if maxAttempts <= 0 {
+		maxAttempts = 10
+	}
+	if lockoutDuration <= 0 {
+		lockoutDuration = 15 * time.Minute
+	}
 	return &AuthService{
-		db:         db,
-		jwtSecret:  jwtSecret,
-		accessTTL:  accessTTL,
-		refreshTTL: refreshTTL,
+		db:              db,
+		rdb:             rdb,
+		jwtSecret:       jwtSecret,
+		accessTTL:       accessTTL,
+		refreshTTL:      refreshTTL,
+		maxAttempts:     maxAttempts,
+		lockoutDuration: lockoutDuration,
 	}
 }
 
@@ -65,18 +81,32 @@ func (s *AuthService) Register(handle, email, password, displayName string) (*mo
 }
 
 // Login authenticates a user by email and password, returning the user with tokens.
+// Implements progressive lockout: after maxAttempts consecutive failures within
+// the lockout window, the account is temporarily locked.
 func (s *AuthService) Login(email, password string) (*model.User, string, string, error) {
+	// Check if the account is locked before doing anything else.
+	if locked, remaining := s.isAccountLocked(email); locked {
+		return nil, "", "", fmt.Errorf("%w: try again in %s", ErrAccountLocked, remaining.Truncate(time.Second))
+	}
+
 	var user model.User
 	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Record the failed attempt even for non-existent accounts to prevent
+			// email enumeration timing attacks.
+			s.recordFailedAttempt(email)
 			return nil, "", "", ErrInvalidCredentials
 		}
 		return nil, "", "", fmt.Errorf("failed to find user: %w", err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		s.recordFailedAttempt(email)
 		return nil, "", "", ErrInvalidCredentials
 	}
+
+	// Successful login — clear the failed attempt counter.
+	s.clearFailedAttempts(email)
 
 	accessToken, refreshToken, err := s.generateTokens(user.ID)
 	if err != nil {
@@ -159,6 +189,75 @@ func (s *AuthService) RevokeRefreshToken(refreshToken string) error {
 	}
 	return nil
 }
+
+// --- Account lockout ---
+
+// lockoutKey returns the Redis key for tracking failed login attempts.
+func (s *AuthService) lockoutKey(email string) string {
+	return "login_attempts:" + email
+}
+
+// recordFailedAttempt increments the failed login counter for the given email.
+// The counter expires after the lockout duration so it auto-resets.
+func (s *AuthService) recordFailedAttempt(email string) {
+	if s.rdb == nil {
+		return
+	}
+	ctx := context.Background()
+	key := s.lockoutKey(email)
+
+	count, err := s.rdb.Incr(ctx, key).Result()
+	if err != nil {
+		return // fail-open: don't block logins if Redis is unavailable
+	}
+
+	// Set expiry on first attempt or refresh it on every attempt to create
+	// a sliding window.
+	if count == 1 {
+		s.rdb.Expire(ctx, key, s.lockoutDuration)
+	}
+}
+
+// isAccountLocked checks whether the email has exceeded the maximum failed
+// login attempts within the lockout window.
+func (s *AuthService) isAccountLocked(email string) (bool, time.Duration) {
+	if s.rdb == nil {
+		return false, 0
+	}
+	ctx := context.Background()
+	key := s.lockoutKey(email)
+
+	countStr, err := s.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return false, 0 // key doesn't exist or Redis error — not locked
+	}
+
+	count, err := strconv.Atoi(countStr)
+	if err != nil {
+		return false, 0
+	}
+
+	if count < s.maxAttempts {
+		return false, 0
+	}
+
+	// Account is locked — report how long until the lockout expires.
+	ttl, err := s.rdb.TTL(ctx, key).Result()
+	if err != nil || ttl <= 0 {
+		return true, s.lockoutDuration
+	}
+	return true, ttl
+}
+
+// clearFailedAttempts removes the failed login counter after a successful login.
+func (s *AuthService) clearFailedAttempts(email string) {
+	if s.rdb == nil {
+		return
+	}
+	s.rdb.Del(context.Background(), s.lockoutKey(email))
+}
+
+// --- Token generation ---
 
 // generateTokens creates a new access and refresh JWT token pair for the given user ID.
 func (s *AuthService) generateTokens(userID uuid.UUID) (string, string, error) {

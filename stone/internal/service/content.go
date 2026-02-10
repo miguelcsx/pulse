@@ -30,9 +30,7 @@ func NewContentService(db *gorm.DB, storage store.Storage, tags *TagService, med
 // For text posts, no file is needed. Tags are user-defined strings (hashtags).
 func (s *ContentService) Create(creatorID uuid.UUID, contentType string, filename string, file io.Reader, body string, tagNames []string) (*model.Content, error) {
 	// Validate content type
-	switch contentType {
-	case model.ContentTypeImage, model.ContentTypeVideo, model.ContentTypeShortVideo, model.ContentTypeText:
-	default:
+	if !model.IsValidContentType(contentType) {
 		return nil, fmt.Errorf("invalid content type: %s", contentType)
 	}
 

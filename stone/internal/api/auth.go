@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/pulse/stone/internal/service"
 )
 
 type registerRequest struct {
@@ -39,7 +41,7 @@ func (s *Server) Register(c *gin.Context) {
 
 	user, accessToken, refreshToken, err := s.authService.Register(req.Handle, req.Email, req.Password, req.DisplayName)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, gin.H{"error": "handle or email already taken"})
 		return
 	}
 
@@ -60,6 +62,10 @@ func (s *Server) Login(c *gin.Context) {
 
 	user, accessToken, refreshToken, err := s.authService.Login(req.Email, req.Password)
 	if err != nil {
+		if errors.Is(err, service.ErrAccountLocked) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

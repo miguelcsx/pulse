@@ -152,6 +152,28 @@ func (s *PathService) Follow(pathID, userID uuid.UUID) error {
 	})
 }
 
+// Unfollow removes a path follow and decrements the follower count.
+func (s *PathService) Unfollow(pathID, userID uuid.UUID) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("path_id = ? AND user_id = ?", pathID, userID).
+			Delete(&model.PathFollow{})
+		if result.Error != nil {
+			return fmt.Errorf("failed to unfollow path: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("path follow relationship not found")
+		}
+
+		if err := tx.Model(&model.Path{}).
+			Where("id = ? AND follower_count > 0", pathID).
+			UpdateColumn("follower_count", gorm.Expr("follower_count - 1")).Error; err != nil {
+			return fmt.Errorf("failed to decrement follower count: %w", err)
+		}
+
+		return nil
+	})
+}
+
 // IsFollowing checks whether a user is following a specific path.
 func (s *PathService) IsFollowing(pathID, userID uuid.UUID) (bool, error) {
 	var count int64
