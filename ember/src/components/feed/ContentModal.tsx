@@ -1,6 +1,9 @@
+import { useEffect } from "react";
 import Modal from "../ui/Modal";
 import type { Content } from "@pulse/drift/types";
 import ReactionBar from "./ReactionBar";
+import MediaFallback from "../ui/MediaFallback";
+import { trackView } from "../../api/events";
 
 interface Props {
   content: Content;
@@ -11,26 +14,31 @@ function renderContent(content: Content) {
   switch (content.content_type) {
     case "image":
       return (
-        <img
+        <MediaFallback
           src={content.media_url}
           alt={content.body || "Image post"}
+          type="image"
           className="w-full max-h-[70vh] object-contain rounded"
         />
       );
     case "video":
     case "short_video":
       return (
-        <video
+        <MediaFallback
           src={content.media_url}
+          alt={content.body || "Video post"}
+          type={content.content_type}
+          className="w-full max-h-[70vh] rounded bg-black"
           controls
           playsInline
-          className="w-full max-h-[70vh] rounded bg-black"
         />
       );
     case "text":
       return (
         <div className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{content.body}</p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {content.body}
+          </p>
         </div>
       );
     default:
@@ -39,6 +47,10 @@ function renderContent(content: Content) {
 }
 
 export default function ContentModal({ content, onClose }: Props) {
+  useEffect(() => {
+    trackView("content", content.id);
+  }, [content.id]);
+
   return (
     <Modal open onClose={onClose} title="">
       {renderContent(content)}
@@ -58,7 +70,9 @@ export default function ContentModal({ content, onClose }: Props) {
         </div>
       )}
       <ReactionBar contentId={content.id} initialCounts={content.reactions} />
-      <p className="mt-2 text-xs text-[var(--color-text-muted)]">by {content.creator?.display_name}</p>
+      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+        by {content.creator?.display_name}
+      </p>
     </Modal>
   );
 }

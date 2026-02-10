@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactionKind } from "@pulse/drift/types";
 import { REACTION_LABELS } from "@pulse/drift/types";
 import { reactToContent, removeReaction } from "../../api/content";
+import { trackReaction } from "../../api/events";
 
 const REACTION_SHORT_LABELS: Record<ReactionKind, string> = {
   gave_me_energy: "Energy",
@@ -19,7 +20,9 @@ interface Props {
 }
 
 export default function ReactionBar({ contentId, initialCounts }: Props) {
-  const [counts, setCounts] = useState<Record<string, number>>(initialCounts ?? {});
+  const [counts, setCounts] = useState<Record<string, number>>(
+    initialCounts ?? {},
+  );
   const [activeKinds, setActiveKinds] = useState<Set<ReactionKind>>(new Set());
   const [busyKind, setBusyKind] = useState<ReactionKind | null>(null);
 
@@ -32,6 +35,7 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
     try {
       if (isActive) {
         await removeReaction(contentId, kind);
+        trackReaction(contentId, kind, false);
         setActiveKinds((prev) => {
           const next = new Set(prev);
           next.delete(kind);
@@ -43,6 +47,7 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
         }));
       } else {
         await reactToContent(contentId, kind);
+        trackReaction(contentId, kind, true);
         setActiveKinds((prev) => {
           const next = new Set(prev);
           next.add(kind);
@@ -59,7 +64,10 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
   };
 
   return (
-    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Semantic reactions">
+    <div
+      className="mt-3 flex flex-wrap gap-1.5"
+      aria-label="Semantic reactions"
+    >
       {REACTION_KINDS.map((kind) => {
         const isActive = activeKinds.has(kind);
         const count = counts[kind] ?? 0;
