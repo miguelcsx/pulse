@@ -10,7 +10,9 @@ export async function getPaths(
     params.cursor = cursor;
   }
 
-  const response = await client.get<PaginatedResponse<Path>>("/paths", { params });
+  const response = await client.get<PaginatedResponse<Path>>("/paths", {
+    params,
+  });
   return response.data;
 }
 
@@ -26,4 +28,8 @@ export async function createPath(data: PathCreate): Promise<Path> {
 
 export async function followPath(id: string): Promise<void> {
   await client.post(`/paths/${id}/follow`);
+}
+
+export async function unfollowPath(id: string): Promise<void> {
+  await client.delete(`/paths/${id}/follow`);
 }
