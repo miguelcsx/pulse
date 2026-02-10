@@ -1,0 +1,9 @@
+# Nix build output
+result
+result-*
+
+# Local data directory (postgres, redis)
+.data/
+
+# direnv cache
+.direnv/
