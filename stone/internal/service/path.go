@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -187,4 +188,101 @@ func (s *PathService) IsFollowing(pathID, userID uuid.UUID) (bool, error) {
 		return false, fmt.Errorf("failed to check path follow: %w", err)
 	}
 	return count > 0, nil
+}
+
+// GenerateFromRecentContent auto-generates paths by clustering recent content
+// around popular tags. Tags that appear on 3+ pieces of content in the last 48h
+// qualify. A system-generated path is created per qualifying tag (if one doesn't
+// already exist from the last 24h), with up to 10 recent content items.
+func (s *PathService) GenerateFromRecentContent() {
+	cutoff := time.Now().Add(-48 * time.Hour)
+
+	// Find tags used on 3+ content items in the last 48h.
+	type tagRow struct {
+		TagID uuid.UUID
+		Name  string
+		Count int
+	}
+	var qualifying []tagRow
+	err := s.db.Raw(`
+		SELECT t.id AS tag_id, t.name, COUNT(ct.content_id) AS count
+		FROM tags t
+		JOIN content_tags ct ON ct.tag_id = t.id
+		JOIN contents c ON c.id = ct.content_id
+		WHERE c.created_at >= ?
+		GROUP BY t.id, t.name
+		HAVING COUNT(ct.content_id) >= 3
+	`, cutoff).Scan(&qualifying).Error
+	if err != nil {
+		slog.Error("path generation: failed to query qualifying tags", "error", err)
+		return
+	}
+
+	if len(qualifying) == 0 {
+		return
+	}
+
+	recentPathCutoff := time.Now().Add(-24 * time.Hour)
+
+	for _, qt := range qualifying {
+		// Check if a system-generated path for this tag already exists from the last 24h.
+		var existing int64
+		err := s.db.Model(&model.Path{}).
+			Where("system_generated = ? AND title = ? AND created_at >= ?",
+				true, "Explore: #"+qt.Name, recentPathCutoff).
+			Count(&existing).Error
+		if err != nil {
+			slog.Error("path generation: failed to check existing path", "tag", qt.Name, "error", err)
+			continue
+		}
+		if existing > 0 {
+			continue
+		}
+
+		// Get up to 10 recent content items with this tag.
+		var contents []model.Content
+		err = s.db.Joins("JOIN content_tags ct ON ct.content_id = contents.id").
+			Where("ct.tag_id = ? AND contents.created_at >= ?", qt.TagID, cutoff).
+			Order("contents.created_at DESC").
+			Limit(10).
+			Find(&contents).Error
+		if err != nil {
+			slog.Error("path generation: failed to query content for tag", "tag", qt.Name, "error", err)
+			continue
+		}
+		if len(contents) == 0 {
+			continue
+		}
+
+		// Use the first content's creator as the path creator.
+		path := &model.Path{
+			CreatorID:       contents[0].CreatorID,
+			Title:           "Explore: #" + qt.Name,
+			Description:     "Auto-generated journey through recent #" + qt.Name + " content",
+			SystemGenerated: true,
+		}
+
+		err = s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(path).Error; err != nil {
+				return fmt.Errorf("failed to create path: %w", err)
+			}
+			for i, c := range contents {
+				item := model.PathItem{
+					PathID:    path.ID,
+					ContentID: c.ID,
+					Position:  i + 1,
+				}
+				if err := tx.Create(&item).Error; err != nil {
+					return fmt.Errorf("failed to create path item: %w", err)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			slog.Error("path generation: failed to create path", "tag", qt.Name, "error", err)
+			continue
+		}
+
+		slog.Info("path generation: created auto-path", "tag", qt.Name, "items", len(contents))
+	}
 }

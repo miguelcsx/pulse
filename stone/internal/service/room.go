@@ -44,7 +44,7 @@ func (s *RoomService) FindOrCreateByTags(tagIDs []uuid.UUID) (*model.Room, error
 		return nil, fmt.Errorf("at least one tag is required")
 	}
 
-	clusterKey := buildClusterKey(tagIDs)
+	clusterKey := BuildClusterKey(tagIDs)
 
 	var room model.Room
 	err := s.db.Where("cluster_key = ? AND expires_at > ?", clusterKey, time.Now()).
@@ -179,8 +179,8 @@ func (s *RoomService) CleanupExpired() error {
 	return nil
 }
 
-// buildClusterKey creates a deterministic key from sorted tag IDs and the current date bucket.
-func buildClusterKey(tagIDs []uuid.UUID) string {
+// BuildClusterKey creates a deterministic key from sorted tag IDs and the current date bucket.
+func BuildClusterKey(tagIDs []uuid.UUID) string {
 	// Sort tag IDs for deterministic ordering.
 	sorted := make([]string, len(tagIDs))
 	for i, id := range tagIDs {

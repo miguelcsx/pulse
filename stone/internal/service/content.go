@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,10 +21,11 @@ type ContentService struct {
 	storage store.Storage
 	tags    *TagService
 	media   *MediaService
+	rooms   *RoomService
 }
 
-func NewContentService(db *gorm.DB, storage store.Storage, tags *TagService, media *MediaService) *ContentService {
-	return &ContentService{db: db, storage: storage, tags: tags, media: media}
+func NewContentService(db *gorm.DB, storage store.Storage, tags *TagService, media *MediaService, rooms *RoomService) *ContentService {
+	return &ContentService{db: db, storage: storage, tags: tags, media: media, rooms: rooms}
 }
 
 // Create saves content. For image/video types, saves the file via storage.
@@ -115,6 +117,17 @@ func (s *ContentService) createContentRecord(content *model.Content, tags []mode
 		return nil, fmt.Errorf("failed to reload content: %w", err)
 	}
 
+	// Auto-create a mood room for this tag combination (fire-and-forget).
+	if s.rooms != nil && len(content.Tags) > 0 {
+		tagIDs := make([]uuid.UUID, len(content.Tags))
+		for i, t := range content.Tags {
+			tagIDs[i] = t.ID
+		}
+		if _, err := s.rooms.FindOrCreateByTags(tagIDs); err != nil {
+			slog.Error("failed to auto-create room for content", "content_id", content.ID, "error", err)
+		}
+	}
+
 	return content, nil
 }
 
@@ -140,8 +153,27 @@ func (s *ContentService) Delete(id uuid.UUID, userID uuid.UUID) error {
 
 	mediaURL := content.MediaURL
 
-	if err := s.db.Delete(&content).Error; err != nil {
-		return fmt.Errorf("failed to delete content: %w", err)
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Remove reactions referencing this content
+		if err := tx.Where("content_id = ?", id).Delete(&model.Reaction{}).Error; err != nil {
+			return fmt.Errorf("failed to delete reactions: %w", err)
+		}
+		// Remove content-tag associations
+		if err := tx.Where("content_id = ?", id).Delete(&model.ContentTag{}).Error; err != nil {
+			return fmt.Errorf("failed to delete content tags: %w", err)
+		}
+		// Remove path items referencing this content
+		if err := tx.Where("content_id = ?", id).Delete(&model.PathItem{}).Error; err != nil {
+			return fmt.Errorf("failed to delete path items: %w", err)
+		}
+		// Delete the content itself
+		if err := tx.Delete(&content).Error; err != nil {
+			return fmt.Errorf("failed to delete content: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	if mediaURL != "" {

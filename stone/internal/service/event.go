@@ -85,7 +85,7 @@ func (s *EventService) RecordBatch(userID uuid.UUID, events []EventInput) error 
 			Metadata:   metadata,
 		})
 
-		delta := s.implicitSignalFromEvent(eventType, metadata)
+		delta := implicitSignalFromEvent(eventType, metadata)
 		if delta != 0 && targetID != nil {
 			signals = append(signals, affinitySignal{
 				targetType: targetType,
@@ -261,7 +261,7 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 // implicitSignalFromEvent computes the affinity signal weight for an event,
 // using config-driven weights for static types and dynamic calculation for
 // dwell/view/skip based on metadata.
-func (s *EventService) implicitSignalFromEvent(eventType string, metadata string) float64 {
+func implicitSignalFromEvent(eventType string, metadata string) float64 {
 	typ := strings.ToLower(strings.TrimSpace(eventType))
 	switch typ {
 	case "view", "dwell":
@@ -273,7 +273,10 @@ func (s *EventService) implicitSignalFromEvent(eventType string, metadata string
 		penalty := 1.0 - (atMS / 2000.0)
 		return -clamp(penalty, 0, 1.0)
 	default:
-		return s.cfg.SignalWeight(typ)
+		if w, ok := model.DefaultSignalWeights[typ]; ok {
+			return w
+		}
+		return 0
 	}
 }
 
