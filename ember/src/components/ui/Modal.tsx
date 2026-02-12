@@ -117,7 +117,7 @@ export default function Modal({ open, onClose, title, children }: ModalProps) {
         aria-label={title || "Modal dialog"}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="w-full max-w-md rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-6 shadow-xl animate-in fade-in zoom-in-95 outline-none"
+        className="w-full max-w-md rounded-xl bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-6 shadow-xl animate-in outline-none"
       >
         <div className="flex items-center justify-between mb-4">
           {title && (

@@ -12,11 +12,11 @@ export default function ConnectionStatus() {
     <div
       role="status"
       aria-live="polite"
-      className="flex items-center justify-center gap-2 bg-amber-900/60 border-b border-amber-700/50 px-4 py-1.5 text-xs text-amber-200"
+      className="flex items-center justify-center gap-2 bg-[var(--color-surface)] border-b border-[var(--color-warning)] px-4 py-1.5 text-xs text-[var(--color-warning)]"
     >
       <span className="relative flex h-2 w-2 shrink-0">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 animate-ping" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+        <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--color-warning)] opacity-75 animate-ping" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-warning)]" />
       </span>
       <span>Reconnecting&hellip;</span>
     </div>

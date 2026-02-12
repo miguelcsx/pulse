@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Header from "./Header";
 import BottomNav from "./BottomNav";
 import ConnectionStatus from "../ui/ConnectionStatus";
+import ContextSheet from "../feed/ContextSheet";
 
 export default function AppShell() {
   const location = useLocation();
@@ -25,6 +26,7 @@ export default function AppShell() {
           <Outlet />
         </div>
       </main>
+      <ContextSheet />
       <BottomNav />
     </div>
   );

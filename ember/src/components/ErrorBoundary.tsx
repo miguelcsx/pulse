@@ -40,7 +40,7 @@ export default class ErrorBoundary extends Component<Props, State> {
               </p>
             </div>
             {this.state.error && (
-              <pre className="text-xs text-red-400 bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] overflow-auto max-h-40 text-left">
+              <pre className="text-xs text-[var(--color-error)] bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] overflow-auto max-h-40 text-left">
                 {this.state.error.message}
               </pre>
             )}

@@ -23,15 +23,15 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
-          className={`w-full rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 focus:ring-offset-[var(--color-bg)] ${
+          className={`w-full rounded-lg border bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-1 focus:ring-offset-[var(--color-bg)] ${
             error
-              ? "border-red-500"
+              ? "border-[var(--color-error)]"
               : "border-[var(--color-border)]"
           } ${className}`}
           {...props}
         />
         {error && (
-          <p className="text-xs text-red-400">{error}</p>
+          <p className="text-xs text-[var(--color-error)]">{error}</p>
         )}
       </div>
     );

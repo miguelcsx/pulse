@@ -1,9 +1,9 @@
 import { useUiStore } from "../../store/uiStore";
 
 const typeClasses = {
-  success: "border-green-600 bg-green-900/40 text-green-300",
-  error: "border-red-600 bg-red-900/40 text-red-300",
-  info: "border-blue-600 bg-blue-900/40 text-blue-300",
+  success: "border-[var(--color-success)] bg-[var(--color-surface)] text-[var(--color-success)]",
+  error: "border-[var(--color-error)] bg-[var(--color-surface)] text-[var(--color-error)]",
+  info: "border-[var(--color-primary)] bg-[var(--color-surface)] text-[var(--color-primary)]",
 } as const;
 
 export default function Toast() {

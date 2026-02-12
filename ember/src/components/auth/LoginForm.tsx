@@ -59,7 +59,7 @@ export default function LoginForm() {
       />
 
       {error && (
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-[var(--color-error)]">{error}</p>
       )}
 
       <Button type="submit" loading={loading}>
@@ -68,7 +68,7 @@ export default function LoginForm() {
 
       <p className="text-center text-sm text-[var(--color-text-muted)]">
         Don&apos;t have an account?{" "}
-        <Link to="/register" className="text-indigo-400 hover:text-indigo-300">
+        <Link to="/register" className="text-[var(--color-primary)] hover:opacity-80">
           Register
         </Link>
       </p>

@@ -3,11 +3,11 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import Spinner from "./Spinner";
 
 const variantClasses = {
-  primary: "bg-indigo-600 hover:bg-indigo-500 text-white",
+  primary: "bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white",
   secondary:
     "bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]",
   ghost: "bg-transparent hover:bg-[var(--color-surface)] text-[var(--color-text)]",
-  danger: "bg-red-600 hover:bg-red-500 text-white",
+  danger: "bg-[var(--color-error)] hover:opacity-90 text-white",
 } as const;
 
 const sizeClasses = {
@@ -40,7 +40,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || loading}
-        className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-[var(--color-bg)] disabled:opacity-50 disabled:pointer-events-none ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        className={`inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2 focus:ring-offset-[var(--color-bg)] disabled:opacity-50 disabled:pointer-events-none ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
         {...props}
       >
         {loading && <Spinner size="sm" className="mr-2" />}

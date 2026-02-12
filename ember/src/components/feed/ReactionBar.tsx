@@ -4,12 +4,12 @@ import { REACTION_LABELS } from "@pulse/drift/types";
 import { reactToContent, removeReaction } from "../../api/content";
 import { trackReaction } from "../../api/events";
 
-const REACTION_SHORT_LABELS: Record<ReactionKind, string> = {
-  gave_me_energy: "Energy",
-  calmed_me: "Calm",
-  on_repeat: "Repeat",
-  surprised_me: "Surprised",
-  my_aesthetic: "Aesthetic",
+const REACTION_CONFIG: Record<ReactionKind, { label: string; emoji: string; colorVar: string }> = {
+  gave_me_energy: { label: "Energy", emoji: "\u26A1", colorVar: "--color-accent-energy" },
+  calmed_me: { label: "Calm", emoji: "\uD83C\uDF0A", colorVar: "--color-accent-calm" },
+  on_repeat: { label: "Repeat", emoji: "\uD83D\uDD01", colorVar: "--color-accent-repeat" },
+  surprised_me: { label: "Surprised", emoji: "\u2728", colorVar: "--color-accent-surprise" },
+  my_aesthetic: { label: "Aesthetic", emoji: "\u2B50", colorVar: "--color-accent-aesthetic" },
 };
 
 const REACTION_KINDS = Object.keys(REACTION_LABELS) as ReactionKind[];
@@ -71,6 +71,7 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
       {REACTION_KINDS.map((kind) => {
         const isActive = activeKinds.has(kind);
         const count = counts[kind] ?? 0;
+        const config = REACTION_CONFIG[kind];
         return (
           <button
             key={kind}
@@ -78,13 +79,21 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
             title={REACTION_LABELS[kind]}
             onClick={() => toggleReaction(kind)}
             disabled={busyKind !== null}
-            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+            className={`text-xs px-2 py-1 rounded-full border transition-all active:scale-95 ${
               isActive
-                ? "bg-indigo-600 border-indigo-600 text-white"
-                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-indigo-500"
+                ? "text-white"
+                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-emphasis)]"
             }`}
+            style={
+              isActive
+                ? {
+                    backgroundColor: `var(${config.colorVar})`,
+                    borderColor: `var(${config.colorVar})`,
+                  }
+                : undefined
+            }
           >
-            {REACTION_SHORT_LABELS[kind]}
+            {config.emoji} {config.label}
             {count > 0 && <span className="ml-1">{count}</span>}
           </button>
         );

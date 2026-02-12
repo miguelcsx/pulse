@@ -10,6 +10,8 @@ interface MediaFallbackProps {
   playsInline?: boolean;
   preload?: string;
   loading?: "lazy" | "eager";
+  autoPlay?: boolean;
+  videoRef?: React.RefCallback<HTMLVideoElement>;
 }
 
 function Placeholder({ className, message }: { className?: string; message: string }) {
@@ -51,6 +53,8 @@ export default function MediaFallback({
   playsInline,
   preload,
   loading,
+  autoPlay,
+  videoRef,
 }: MediaFallbackProps) {
   const [errored, setErrored] = useState(false);
 
@@ -76,12 +80,15 @@ export default function MediaFallback({
 
   return (
     <video
+      ref={videoRef}
       src={src}
       className={className}
       controls={controls}
       muted={muted}
       playsInline={playsInline}
       preload={preload}
+      autoPlay={autoPlay}
+      loop
       onError={() => setErrored(true)}
     />
   );

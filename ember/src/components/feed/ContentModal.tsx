@@ -1,13 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../ui/Modal";
 import type { Content } from "@pulse/drift/types";
 import ReactionBar from "./ReactionBar";
 import MediaFallback from "../ui/MediaFallback";
 import { trackView } from "../../api/events";
+import { deleteContent } from "../../api/content";
+import { useAuthStore } from "../../store/authStore";
+import { useUiStore } from "../../store/uiStore";
 
 interface Props {
   content: Content;
   onClose: () => void;
+  onDelete?: () => void;
 }
 
 function renderContent(content: Content) {
@@ -31,6 +35,8 @@ function renderContent(content: Content) {
           className="w-full max-h-[70vh] rounded bg-black"
           controls
           playsInline
+          autoPlay
+          muted
         />
       );
     case "text":
@@ -46,10 +52,31 @@ function renderContent(content: Content) {
   }
 }
 
-export default function ContentModal({ content, onClose }: Props) {
+export default function ContentModal({ content, onClose, onDelete }: Props) {
+  const currentUser = useAuthStore((s) => s.user);
+  const addToast = useUiStore((s) => s.addToast);
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     trackView("content", content.id);
   }, [content.id]);
+
+  const isOwner = currentUser?.id === content.creator_id;
+
+  const handleDelete = async () => {
+    if (!confirm("Delete this content? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteContent(content.id);
+      addToast("Content deleted", "success");
+      onDelete?.();
+      onClose();
+    } catch {
+      addToast("Failed to delete content", "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} title="">
@@ -62,7 +89,7 @@ export default function ContentModal({ content, onClose }: Props) {
           {content.tags.map((tag) => (
             <span
               key={tag.id}
-              className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
+              className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-tag-bg)] text-[var(--color-tag-text)]"
             >
               #{tag.name}
             </span>
@@ -70,9 +97,20 @@ export default function ContentModal({ content, onClose }: Props) {
         </div>
       )}
       <ReactionBar contentId={content.id} initialCounts={content.reactions} />
-      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-        by {content.creator?.display_name}
-      </p>
+      <div className="mt-2 flex items-center justify-between">
+        <p className="text-xs text-[var(--color-text-muted)]">
+          by {content.creator?.display_name}
+        </p>
+        {isOwner && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-xs px-3 py-1 rounded bg-[var(--color-error)] hover:opacity-90 text-white disabled:opacity-50 transition-colors"
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        )}
+      </div>
     </Modal>
   );
 }

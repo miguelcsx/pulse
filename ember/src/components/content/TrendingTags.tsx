@@ -39,7 +39,7 @@ export default function TrendingTags({ limit = 10 }: Props) {
     return (
       <section className="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-red-400">Could not load trending tags</p>
+          <p className="text-xs text-[var(--color-error)]">Could not load trending tags</p>
           <button
             onClick={handleRetry}
             className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
@@ -62,7 +62,7 @@ export default function TrendingTags({ limit = 10 }: Props) {
         {tags.map((tag) => (
           <span
             key={tag.id}
-            className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-surface-hover)] text-[var(--color-text-muted)]"
+            className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-tag-bg)] text-[var(--color-tag-text)]"
           >
             #{tag.name}
           </span>
