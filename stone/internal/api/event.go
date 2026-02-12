@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -25,14 +26,25 @@ type eventInput struct {
 func (s *Server) RecordEvents(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
-	var req recordEventsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Read raw body so we can try two formats.
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil || len(body) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "empty request body"})
 		return
 	}
 
-	inputs := make([]service.EventInput, len(req.Events))
-	for i, e := range req.Events {
+	// Accept both `{ "events": [...] }` and a bare `[...]` array.
+	var events []eventInput
+	var req recordEventsRequest
+	if err := json.Unmarshal(body, &req); err == nil && len(req.Events) > 0 {
+		events = req.Events
+	} else if err := json.Unmarshal(body, &events); err != nil || len(events) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "expected array of events or {\"events\": [...]}"})
+		return
+	}
+
+	inputs := make([]service.EventInput, len(events))
+	for i, e := range events {
 		inputs[i] = service.EventInput{
 			Type:       e.Type,
 			TargetType: e.TargetType,

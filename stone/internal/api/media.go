@@ -40,7 +40,7 @@ func (s *Server) InitMediaUpload(c *gin.Context) {
 		"asset": asset,
 		"upload": gin.H{
 			"method": "PUT",
-			"url":    fmt.Sprintf("%s/media/uploads/%s/file", s.cfg.APIBasePath, asset.ID.String()),
+			"url":    fmt.Sprintf("/media/uploads/%s/file", asset.ID.String()),
 		},
 	})
 }
