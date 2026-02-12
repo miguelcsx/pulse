@@ -20,6 +20,8 @@
       echo "    roots-services stop    Stop all services"
       echo "    roots-services status  Show service status"
       echo ""
+
+      export VITE_DEV_BACKEND_ORIGIN="http://localhost:8080"
     '';
   };
 }
