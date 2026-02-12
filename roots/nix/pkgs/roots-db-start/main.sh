@@ -5,7 +5,7 @@ set -euo pipefail
 PULSE_DATA_DIR="${PULSE_DATA_DIR:-$(git rev-parse --show-toplevel)/.data}"
 PG_DATA="${PULSE_DATA_DIR}/postgres"
 PG_LOG="${PULSE_DATA_DIR}/postgres.log"
-PG_PORT="${PULSE_PG_PORT:-5432}"
+PG_PORT="${PULSE_PG_PORT:-5433}"
 PG_SOCKET_DIR="${PULSE_DATA_DIR}/pg_sockets"
 
 mkdir -p "${PULSE_DATA_DIR}" "${PG_SOCKET_DIR}"
@@ -48,7 +48,7 @@ pg_ctl \
   > /dev/null
 
 # Wait for it to be ready
-for i in $(seq 1 30); do
+for _i in $(seq 1 30); do
   if pg_isready -h 127.0.0.1 -p "${PG_PORT}" -U pulse > /dev/null 2>&1; then
     echo "[INFO] PostgreSQL is ready on port ${PG_PORT}"
     exit 0

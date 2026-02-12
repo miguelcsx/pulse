@@ -5,6 +5,5 @@
   roots-redis-start = pkgs.callPackage ./roots-redis-start { };
   roots-redis-stop = pkgs.callPackage ./roots-redis-stop { };
   roots-services = pkgs.callPackage ./roots-services { inherit lib'; };
-  roots-helper-ports = pkgs.callPackage ./roots-helper-ports { };
   roots-sops = pkgs.callPackage ./roots-sops { };
 }

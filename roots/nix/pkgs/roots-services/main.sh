@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-PULSE_DATA_DIR="${PULSE_DATA_DIR:-$(git rev-parse --show-toplevel)/.data}"
-
 function usage {
   echo ""
   echo "  Usage: roots-services <command>"
@@ -17,7 +15,7 @@ function usage {
 }
 
 function status_services {
-  local pg_port="${PULSE_PG_PORT:-5432}"
+  local pg_port="${PULSE_PG_PORT:-5433}"
   local redis_port="${PULSE_REDIS_PORT:-6379}"
 
   echo ""

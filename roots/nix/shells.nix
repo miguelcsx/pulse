@@ -15,7 +15,6 @@
       echo "    roots-redis-start   Start Redis"
       echo "    roots-redis-stop    Stop Redis"
       echo "    roots-services      Start/stop all services"
-      echo "    roots-helper-ports  Port management helpers"
       echo ""
     '';
   };

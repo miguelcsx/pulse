@@ -4,7 +4,7 @@ set -euo pipefail
 
 PULSE_DATA_DIR="${PULSE_DATA_DIR:-$(git rev-parse --show-toplevel)/.data}"
 PG_DATA="${PULSE_DATA_DIR}/postgres"
-PG_PORT="${PULSE_PG_PORT:-5432}"
+PG_PORT="${PULSE_PG_PORT:-5433}"
 
 if [ ! -d "${PG_DATA}" ]; then
   echo "[INFO] No PostgreSQL data directory found at ${PG_DATA} — nothing to stop"

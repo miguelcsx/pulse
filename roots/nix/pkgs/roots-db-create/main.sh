@@ -3,8 +3,7 @@
 set -euo pipefail
 
 PULSE_DATA_DIR="${PULSE_DATA_DIR:-$(git rev-parse --show-toplevel)/.data}"
-PG_PORT="${PULSE_PG_PORT:-5432}"
-PG_SOCKET_DIR="${PULSE_DATA_DIR}/pg_sockets"
+PG_PORT="${PULSE_PG_PORT:-5433}"
 DB_NAME="${PULSE_DB_NAME:-pulse_dev}"
 DB_USER="${PULSE_DB_USER:-pulse}"
 

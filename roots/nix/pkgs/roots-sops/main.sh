@@ -13,8 +13,7 @@ function sops_export_vars {
   json="$(sops --decrypt --output-type json "${manifest}")"
   for var in "${@:2}"; do
     local value
-    value="$(echo "${json}" | jq -erc ".${var}")"
-    if [ $? -eq 0 ]; then
+    if value="$(echo "${json}" | jq -erc ".${var}")"; then
       export "${var}=${value}"
       echo "[INFO] Exported: ${var}"
     else
