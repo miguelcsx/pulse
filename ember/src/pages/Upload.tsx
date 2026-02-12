@@ -138,8 +138,8 @@ export default function Upload() {
             }}
             className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               contentType === ct.value
-                ? "bg-indigo-600 border-indigo-600 text-white"
-                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-indigo-500"
+                ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white"
+                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-emphasis)]"
             }`}
           >
             {ct.label}
@@ -148,7 +148,7 @@ export default function Upload() {
       </div>
 
       {needsFile && (
-        <label className="block border-2 border-dashed border-[var(--color-border)] rounded-lg p-8 text-center cursor-pointer hover:border-indigo-500 transition-colors">
+        <label className="block border-2 border-dashed border-[var(--color-border)] rounded-lg p-8 text-center cursor-pointer hover:border-[var(--color-primary)] transition-colors">
           {preview ? (
             contentType === "image" ? (
               <img
@@ -218,7 +218,7 @@ export default function Upload() {
                 key={tag}
                 type="button"
                 onClick={() => removeTag(tag)}
-                className="text-xs px-2 py-1 rounded-full bg-indigo-600 text-white hover:bg-indigo-500"
+                className="text-xs px-2 py-1 rounded-full bg-[var(--color-primary)] text-white hover:opacity-90"
               >
                 #{tag} &times;
               </button>
@@ -235,7 +235,7 @@ export default function Upload() {
           {uploadProgress > 0 && uploadProgress < 100 && (
             <div className="mt-2 h-2 w-full rounded-full bg-[var(--color-surface-hover)]">
               <div
-                className="h-2 rounded-full bg-indigo-500 transition-all"
+                className="h-2 rounded-full bg-[var(--color-primary)] transition-all"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>

@@ -28,9 +28,8 @@ function Avatar({
       <img
         src={src}
         alt=""
-        className={`${sizeClasses} rounded-full object-cover bg-indigo-600`}
+        className={`${sizeClasses} rounded-full object-cover bg-[var(--color-primary)]`}
         onError={(e) => {
-          // Fall back to initial on broken avatar URL
           const target = e.currentTarget;
           target.style.display = "none";
           target.nextElementSibling?.classList.remove("hidden");
@@ -41,7 +40,7 @@ function Avatar({
 
   return (
     <div
-      className={`${sizeClasses} rounded-full bg-indigo-600 flex items-center justify-center font-medium`}
+      className={`${sizeClasses} rounded-full bg-[var(--color-primary)] flex items-center justify-center font-medium text-white`}
     >
       {fallbackChar}
     </div>
@@ -59,7 +58,7 @@ function ProfileContentPreview({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] text-left"
+      className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] text-left hover:scale-[1.02] transition-transform"
     >
       {content.content_type === "image" && (
         <MediaFallback
@@ -83,7 +82,7 @@ function ProfileContentPreview({
         />
       )}
       {content.content_type === "text" && (
-        <div className="aspect-square p-3 bg-[var(--color-surface-hover)]">
+        <div className="aspect-square p-3 bg-gradient-to-br from-[var(--color-primary-subtle)] to-[var(--color-surface)]">
           <p className="text-sm line-clamp-8 whitespace-pre-wrap">
             {content.body}
           </p>
@@ -153,7 +152,7 @@ export default function Profile() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-400">{error}</p>
+        <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={handleRetry}
           className="mt-4 px-4 py-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-sm font-medium transition-colors"
@@ -240,7 +239,14 @@ export default function Profile() {
       </section>
 
       {selected && (
-        <ContentModal content={selected} onClose={() => setSelected(null)} />
+        <ContentModal
+          content={selected}
+          onClose={() => setSelected(null)}
+          onDelete={() => {
+            setContent((prev) => prev.filter((c) => c.id !== selected.id));
+            setSelected(null);
+          }}
+        />
       )}
     </div>
   );

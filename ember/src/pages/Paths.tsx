@@ -7,6 +7,7 @@ import { useUiStore } from "../store/uiStore";
 import { usePageTitle } from "../hooks/usePageTitle";
 import type { Path } from "@pulse/drift/types";
 
+
 export default function Paths() {
   usePageTitle("Paths");
   const [paths, setPaths] = useState<Path[]>([]);
@@ -65,7 +66,7 @@ export default function Paths() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-400">{error}</p>
+        <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={load}
           className="mt-4 px-4 py-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-sm font-medium transition-colors"
@@ -78,15 +79,10 @@ export default function Paths() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Paths</h2>
-        <Link to="/paths/new">
-          <Button size="sm">Create Path</Button>
-        </Link>
-      </div>
+      <h2 className="text-lg font-semibold">Paths</h2>
       {paths.length === 0 ? (
         <p className="text-[var(--color-text-muted)] text-sm">
-          No paths yet. Create one to curate a journey.
+          No paths yet. Paths are generated automatically from trending tags.
         </p>
       ) : (
         <>
@@ -94,7 +90,7 @@ export default function Paths() {
             <Link
               key={path.id}
               to={`/paths/${path.id}`}
-              className="block bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-indigo-500 transition-colors"
+              className="block bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-[var(--color-border-emphasis)] transition-colors"
             >
               <h3 className="font-medium">{path.title}</h3>
               {path.description && (

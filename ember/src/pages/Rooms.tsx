@@ -56,7 +56,7 @@ export default function Rooms() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-400">{error}</p>
+        <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={handleRetry}
           className="mt-4 px-4 py-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-sm font-medium transition-colors"
@@ -79,7 +79,7 @@ export default function Rooms() {
           <Link
             key={room.id}
             to={`/rooms/${room.id}`}
-            className="block bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-indigo-500 transition-colors"
+            className="block bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-[var(--color-border-emphasis)] transition-colors"
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">
@@ -94,7 +94,7 @@ export default function Rooms() {
               {room.tags?.map((tag) => (
                 <span
                   key={tag.id}
-                  className="text-xs px-2 py-0.5 rounded-full bg-indigo-900/30 text-indigo-300"
+                  className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-tag-bg)] text-[var(--color-tag-text)]"
                 >
                   {tag.name}
                 </span>

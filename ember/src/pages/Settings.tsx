@@ -4,6 +4,7 @@ import { getMe, logout as logoutAPI, updateMe } from "../api/auth";
 import { useAuthStore } from "../store/authStore";
 import { useUiStore } from "../store/uiStore";
 import { usePageTitle } from "../hooks/usePageTitle";
+import ThemeToggle from "../components/ui/ThemeToggle";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import type { User } from "@pulse/drift/types";
@@ -60,6 +61,13 @@ export default function Settings() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">Settings</h2>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Theme</label>
+        <ThemeToggle />
+      </div>
+
+      <hr className="border-[var(--color-border)]" />
 
       {user && (
         <form onSubmit={handleSave} className="space-y-4">

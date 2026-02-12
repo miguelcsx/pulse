@@ -1,25 +1,31 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { getFeed } from "../api/content";
 import FeedCard from "../components/feed/FeedCard";
 import ContentModal from "../components/feed/ContentModal";
+import InlineSuggestionGroup from "../components/feed/InlineSuggestionGroup";
 import Spinner from "../components/ui/Spinner";
 import TrendingTags from "../components/content/TrendingTags";
 import { useUiStore } from "../store/uiStore";
+import { useFeedContextStore } from "../store/feedContextStore";
+import { useVisibleRoomContext } from "../hooks/useVisibleRoomContext";
 import { usePageTitle } from "../hooks/usePageTitle";
-import type { Content } from "@pulse/drift/types";
+import type { FeedItem, Suggestion } from "@pulse/drift/types";
 
 export default function Feed() {
   usePageTitle("Feed");
-  const [items, setItems] = useState<Content[]>([]);
+  const [items, setItems] = useState<FeedItem[]>([]);
   const [cursor, setCursor] = useState("");
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [selected, setSelected] = useState<Content | null>(null);
+  const [selected, setSelected] = useState<FeedItem | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
   const addToast = useUiStore((s) => s.addToast);
+  const setActiveRoom = useFeedContextStore((s) => s.setActiveRoom);
+  const observe = useVisibleRoomContext(items);
 
   const loadFeed = useCallback(
     async (nextCursor?: string) => {
@@ -30,6 +36,9 @@ export default function Feed() {
           setItems((prev) => [...prev, ...res.items]);
         } else {
           setItems(res.items);
+          if (res.suggestions?.length) {
+            setSuggestions(res.suggestions);
+          }
         }
         setCursor(res.next_cursor);
         setHasMore(res.has_more);
@@ -49,6 +58,11 @@ export default function Feed() {
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  // Clear active room on unmount
+  useEffect(() => {
+    return () => setActiveRoom(null);
+  }, [setActiveRoom]);
 
   const loadMore = useCallback(async () => {
     if (!loadingMoreRef.current && hasMore && cursor) {
@@ -90,7 +104,7 @@ export default function Feed() {
   if (error && items.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-400">{error}</p>
+        <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={() => {
             setLoading(true);
@@ -118,12 +132,18 @@ export default function Feed() {
         </div>
       ) : (
         <>
-          {items.map((item) => (
-            <FeedCard
-              key={item.id}
-              content={item}
-              onClick={() => setSelected(item)}
-            />
+          {items.map((item, index) => (
+            <Fragment key={item.id}>
+              <div ref={observe} data-content-id={item.id}>
+                <FeedCard
+                  content={item}
+                  onClick={() => setSelected(item)}
+                />
+              </div>
+              {index === 4 && suggestions.length > 0 && (
+                <InlineSuggestionGroup suggestions={suggestions} />
+              )}
+            </Fragment>
           ))}
           <div ref={sentinelRef} className="h-8" />
           {loadingMore && (

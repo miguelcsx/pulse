@@ -56,7 +56,7 @@ export default function Suggestions() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-400">{error}</p>
+        <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={handleRetry}
           className="mt-4 px-4 py-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-sm font-medium transition-colors"

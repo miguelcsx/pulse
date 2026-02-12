@@ -5,7 +5,7 @@ export default function NotFound() {
     <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)] p-6">
       <div className="max-w-sm w-full text-center space-y-6">
         <div className="space-y-2">
-          <p className="text-6xl font-bold text-indigo-400">404</p>
+          <p className="text-6xl font-bold text-[var(--color-primary)]">404</p>
           <h1 className="text-xl font-semibold text-[var(--color-text)]">
             Page not found
           </h1>
@@ -16,7 +16,7 @@ export default function NotFound() {
         </div>
         <Link
           to="/"
-          className="inline-block px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+          className="inline-block px-6 py-2.5 rounded-lg bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white text-sm font-medium transition-colors"
         >
           Back to Feed
         </Link>
