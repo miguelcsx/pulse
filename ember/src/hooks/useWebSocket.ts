@@ -16,6 +16,10 @@ function jitteredDelay(base: number): number {
   return Math.max(0, Math.round(base + jitter));
 }
 
+/**
+ * Manages the global WebSocket connection. Call once at the app root.
+ * Room actions (joinRoom / leaveRoom) are available via useWsStore.
+ */
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY_MS);
@@ -27,6 +31,7 @@ export function useWebSocket() {
 
   const accessToken = useAuthStore((s) => s.accessToken);
   const setConnected = useWsStore((s) => s.setConnected);
+  const setSend = useWsStore((s) => s.setSend);
   const updatePresence = useWsStore((s) => s.updatePresence);
 
   const clearTimers = useCallback(() => {
@@ -59,7 +64,8 @@ export function useWebSocket() {
       }
       wsRef.current = null;
     }
-  }, []);
+    setSend(null);
+  }, [setSend]);
 
   const startHeartbeat = useCallback((ws: WebSocket) => {
     if (heartbeatTimerRef.current !== null) {
@@ -113,6 +119,9 @@ export function useWebSocket() {
         if (!mountedRef.current) return;
         reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS;
         setConnected(true);
+        setSend((data: string) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(data);
+        });
         startHeartbeat(ws);
       };
 
@@ -143,6 +152,7 @@ export function useWebSocket() {
       ws.onclose = () => {
         if (!mountedRef.current) return;
         setConnected(false);
+        setSend(null);
         clearTimers();
 
         if (!intentionalCloseRef.current) {
@@ -159,7 +169,7 @@ export function useWebSocket() {
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [closeSocket, clearTimers, setConnected, updatePresence, startHeartbeat],
+    [closeSocket, clearTimers, setConnected, setSend, updatePresence, startHeartbeat],
   );
 
   const scheduleReconnect = useCallback(() => {
@@ -201,24 +211,4 @@ export function useWebSocket() {
       setConnected(false);
     };
   }, [accessToken, connect, closeSocket, clearTimers, setConnected]);
-
-  const joinRoom = useCallback((roomId: string) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({ type: WS_MESSAGE_TYPES.JOIN_ROOM, room_id: roomId }),
-      );
-    }
-  }, []);
-
-  const leaveRoom = useCallback((roomId: string) => {
-    const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({ type: WS_MESSAGE_TYPES.LEAVE_ROOM, room_id: roomId }),
-      );
-    }
-  }, []);
-
-  return { joinRoom, leaveRoom };
 }

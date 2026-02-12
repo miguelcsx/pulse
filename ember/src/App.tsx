@@ -4,6 +4,7 @@ import { useAuthStore } from "./store/authStore";
 import client from "./api/client";
 import { getMe } from "./api/auth";
 import { startEventLoop, stopEventLoop } from "./api/events";
+import { useWebSocket } from "./hooks/useWebSocket";
 import AppShell from "./components/layout/AppShell";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Spinner from "./components/ui/Spinner";
@@ -12,14 +13,18 @@ const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Feed = lazy(() => import("./pages/Feed"));
 const Upload = lazy(() => import("./pages/Upload"));
-const Suggestions = lazy(() => import("./pages/Suggestions"));
-const Rooms = lazy(() => import("./pages/Rooms"));
+const Discover = lazy(() => import("./pages/Discover"));
 const RoomView = lazy(() => import("./pages/RoomView"));
-const Paths = lazy(() => import("./pages/Paths"));
 const PathView = lazy(() => import("./pages/PathView"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+
+function ProfileRedirect() {
+  const user = useAuthStore((s) => s.user);
+  if (!user) return <Navigate to="/login" />;
+  return <Navigate to={`/profile/${user.id}`} replace />;
+}
 
 export default function App() {
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
@@ -69,6 +74,9 @@ export default function App() {
     };
   }, [isAuthenticated, logout, setTokens, setUser]);
 
+  // Maintain a global WebSocket connection while authenticated
+  useWebSocket();
+
   // Start/stop the event tracking loop based on auth state
   useEffect(() => {
     if (isAuthenticated) {
@@ -107,14 +115,16 @@ export default function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<Feed />} />
             <Route path="/upload" element={<Upload />} />
-            <Route path="/suggestions" element={<Suggestions />} />
-            <Route path="/rooms" element={<Rooms />} />
+            <Route path="/discover" element={<Discover />} />
+            <Route path="/profile/me" element={<ProfileRedirect />} />
             <Route path="/rooms/:id" element={<RoomView />} />
-            <Route path="/paths" element={<Paths />} />
-            <Route path="/paths/new" element={<PathView />} />
             <Route path="/paths/:id" element={<PathView />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
+            {/* Legacy routes redirect to discover */}
+            <Route path="/suggestions" element={<Navigate to="/discover" replace />} />
+            <Route path="/rooms" element={<Navigate to="/discover" replace />} />
+            <Route path="/paths" element={<Navigate to="/discover" replace />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

@@ -30,6 +30,13 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <title>Pulse</title>
+    <script>
+      (function() {
+        var t = localStorage.getItem('pulse_theme');
+        var dark = t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
