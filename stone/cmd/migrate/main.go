@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/joho/godotenv"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
@@ -14,8 +13,6 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
-
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)

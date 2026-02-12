@@ -8,8 +8,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/joho/godotenv"
-
 	"github.com/pulse/stone/internal/api"
 	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/scheduler"
@@ -17,8 +15,6 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
-
 	cfg, err := config.Load()
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
@@ -49,11 +45,12 @@ func main() {
 
 	srv := api.NewServer(cfg, db, rdb, storage)
 	mediaSvc := srv.MediaService()
+	pathSvc := srv.PathService()
 
 	// Start the background scheduler for periodic cleanup tasks
-	// (expired rooms, stale tokens, media recovery, old events).
+	// (expired rooms, stale tokens, media recovery, old events, path generation).
 	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
-	sched := scheduler.New(db, cfg, mediaSvc.RecoverAssets)
+	sched := scheduler.New(db, cfg, mediaSvc.RecoverAssets, pathSvc)
 	go sched.Start(schedulerCtx)
 
 	httpServer := &http.Server{
