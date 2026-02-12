@@ -35,7 +35,7 @@
 
           devShells =
             import ./nix/shells.nix { inherit inputs' lib' pkgs self'; };
-          packages = import ./nix/pkgs { inherit lib' pkgs; };
+          packages = import ./nix/pkgs { inherit inputs' lib' pkgs; };
         };
     };
 }

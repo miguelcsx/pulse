@@ -1,6 +1,7 @@
 { inputs', pkgs, projectPath }:
 let
   secrets_dev = projectPath "/secrets/dev.yaml";
+  secrets_prod = projectPath "/secrets/prod.yaml";
 in pkgs.writeShellApplication {
   bashOptions = [ ];
   name = "stone-envars";
@@ -24,8 +25,11 @@ in pkgs.writeShellApplication {
         dev)
           secrets_file="${secrets_dev}"
           ;;
+        prod)
+          secrets_file="${secrets_prod}"
+          ;;
         *)
-          echo "[ERROR] Usage: stone-envars <dev>"
+          echo "[ERROR] Usage: stone-envars <dev|prod>"
           return 1
           ;;
       esac
