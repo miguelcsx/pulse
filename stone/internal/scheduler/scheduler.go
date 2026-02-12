@@ -9,6 +9,7 @@ import (
 
 	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/service"
 )
 
 // Scheduler runs periodic background cleanup tasks.
@@ -19,15 +20,18 @@ type Scheduler struct {
 	// mediaEnqueue is called to re-enqueue stuck media assets for processing.
 	// Injected by the caller so the scheduler doesn't depend on MediaService directly.
 	mediaEnqueue func(assetIDs []string)
+
+	pathService *service.PathService
 }
 
 // New creates a new Scheduler. The mediaEnqueue callback is optional (pass nil
 // to skip media recovery).
-func New(db *gorm.DB, cfg *config.Config, mediaEnqueue func(assetIDs []string)) *Scheduler {
+func New(db *gorm.DB, cfg *config.Config, mediaEnqueue func(assetIDs []string), pathService *service.PathService) *Scheduler {
 	return &Scheduler{
 		db:           db,
 		cfg:          cfg,
 		mediaEnqueue: mediaEnqueue,
+		pathService:  pathService,
 	}
 }
 
@@ -63,6 +67,7 @@ func (s *Scheduler) runAll() {
 	s.cleanupExpiredTokens()
 	s.recoverStuckMedia()
 	s.cleanupStaleEvents()
+	s.generatePaths()
 }
 
 // cleanupExpiredRooms deletes rooms that have passed their expiration time.
@@ -157,4 +162,12 @@ func (s *Scheduler) cleanupStaleEvents() {
 	if result.RowsAffected > 0 {
 		slog.Info("scheduler: cleaned up stale events", "count", result.RowsAffected)
 	}
+}
+
+// generatePaths auto-generates paths from recent popular-tag content.
+func (s *Scheduler) generatePaths() {
+	if s.pathService == nil {
+		return
+	}
+	s.pathService.GenerateFromRecentContent()
 }

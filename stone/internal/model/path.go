@@ -8,15 +8,16 @@ import (
 )
 
 type Path struct {
-	ID            uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	CreatorID     uuid.UUID  `gorm:"type:uuid;not null;index" json:"creator_id"`
-	Creator       User       `gorm:"foreignKey:CreatorID" json:"creator,omitempty"`
-	Title         string     `gorm:"size:200;not null" json:"title"`
-	Description   string     `gorm:"size:1000" json:"description"`
-	Items         []PathItem `gorm:"foreignKey:PathID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
-	FollowerCount int        `gorm:"default:0" json:"follower_count"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	CreatorID       uuid.UUID  `gorm:"type:uuid;not null;index" json:"creator_id"`
+	Creator         User       `gorm:"foreignKey:CreatorID" json:"creator,omitempty"`
+	Title           string     `gorm:"size:200;not null" json:"title"`
+	Description     string     `gorm:"size:1000" json:"description"`
+	SystemGenerated bool       `gorm:"default:false" json:"system_generated"`
+	Items           []PathItem `gorm:"foreignKey:PathID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
+	FollowerCount   int        `gorm:"default:0" json:"follower_count"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 func (p *Path) BeforeCreate(tx *gorm.DB) error {

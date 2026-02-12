@@ -38,14 +38,51 @@ type Config struct {
 	CORSOrigins string `envconfig:"CORS_ORIGINS" default:""`
 	WSOrigins   string `envconfig:"WS_ORIGINS" default:""`
 
-	RateLimitRPS   int    `envconfig:"RATE_LIMIT_RPS" default:"100"`
-	RateLimitBurst int    `envconfig:"RATE_LIMIT_BURST" default:"200"`
-	TrustedProxies string `envconfig:"TRUSTED_PROXIES" default:"127.0.0.1,::1"`
+	RateLimitRPS      int    `envconfig:"RATE_LIMIT_RPS" default:"100"`
+	RateLimitBurst    int    `envconfig:"RATE_LIMIT_BURST" default:"200"`
+	RateLimitFailOpen bool   `envconfig:"RATE_LIMIT_FAIL_OPEN" default:"false"`
+	TrustedProxies    string `envconfig:"TRUSTED_PROXIES" default:"127.0.0.1,::1"`
 
 	ReadTimeout     time.Duration `envconfig:"READ_TIMEOUT" default:"15s"`
 	WriteTimeout    time.Duration `envconfig:"WRITE_TIMEOUT" default:"15s"`
 	IdleTimeout     time.Duration `envconfig:"IDLE_TIMEOUT" default:"60s"`
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"10s"`
+
+	// Database pool
+	DBMaxOpenConns    int           `envconfig:"DB_MAX_OPEN_CONNS" default:"25"`
+	DBMaxIdleConns    int           `envconfig:"DB_MAX_IDLE_CONNS" default:"5"`
+	DBConnMaxLifetime time.Duration `envconfig:"DB_CONN_MAX_LIFETIME" default:"5m"`
+
+	// Scheduler
+	SchedulerInterval      time.Duration `envconfig:"SCHEDULER_INTERVAL" default:"5m"`
+	MediaRecoveryThreshold time.Duration `envconfig:"MEDIA_RECOVERY_THRESHOLD" default:"15m"`
+
+	// Auth brute-force protection
+	LoginMaxAttempts     int           `envconfig:"LOGIN_MAX_ATTEMPTS" default:"10"`
+	LoginLockoutDuration time.Duration `envconfig:"LOGIN_LOCKOUT_DURATION" default:"15m"`
+
+	// Tag cache
+	TagCacheTTL time.Duration `envconfig:"TAG_CACHE_TTL" default:"5m"`
+
+	// Room
+	RoomTTL time.Duration `envconfig:"ROOM_TTL" default:"24h"`
+
+	// WebSocket
+	WSMaxMessageSize int64 `envconfig:"WS_MAX_MESSAGE_SIZE" default:"4096"`
+
+	// Observability
+	MetricsEnabled bool `envconfig:"METRICS_ENABLED" default:"false"`
+
+	// Affinity decay half-lives (in days)
+	AffinityHalfLife7DDays  float64 `envconfig:"AFFINITY_HALF_LIFE_7D_DAYS" default:"3.5"`
+	AffinityHalfLife30DDays float64 `envconfig:"AFFINITY_HALF_LIFE_30D_DAYS" default:"15"`
+
+	// Feed algorithm weights and mix ratios
+	FeedAffinityWeight float64       `envconfig:"FEED_AFFINITY_WEIGHT" default:"0.4"`
+	FeedRecencyWeight  float64       `envconfig:"FEED_RECENCY_WEIGHT" default:"0.35"`
+	FeedQualityWeight  float64       `envconfig:"FEED_QUALITY_WEIGHT" default:"0.25"`
+	FeedDiscoveryRatio float64       `envconfig:"FEED_DISCOVERY_RATIO" default:"0.3"`
+	FeedTrendingMaxAge time.Duration `envconfig:"FEED_TRENDING_MAX_AGE" default:"48h"`
 }
 
 func Load() (*Config, error) {
@@ -130,3 +167,9 @@ func (c *Config) validate() error {
 	}
 	return nil
 }
+
+// IsProduction reports whether the server is running in production mode.
+func (c *Config) IsProduction() bool {
+	return c.Env == "production"
+}
+

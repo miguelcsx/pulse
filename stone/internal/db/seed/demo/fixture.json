@@ -1,0 +1,439 @@
+{
+  "password": "pulse-demo-2024",
+  "users": [
+    {
+      "handle": "lunanova",
+      "email": "luna@example.com",
+      "display_name": "Luna Nova",
+      "bio": "Night photographer. Chasing city lights and quiet corners.",
+      "location": "Tokyo"
+    },
+    {
+      "handle": "marcelo.wav",
+      "email": "marcelo@example.com",
+      "display_name": "Marcelo",
+      "bio": "Lofi producer & visual storyteller. Sound is texture.",
+      "location": "Buenos Aires"
+    },
+    {
+      "handle": "iris.analog",
+      "email": "iris@example.com",
+      "display_name": "Iris Vega",
+      "bio": "Film photography only. 35mm dreams in a digital world.",
+      "location": "Portland"
+    },
+    {
+      "handle": "kai",
+      "email": "kai@example.com",
+      "display_name": "Kai Chen",
+      "bio": "Street photographer. Finding rhythm in the everyday.",
+      "location": "New York"
+    },
+    {
+      "handle": "solene",
+      "email": "solene@example.com",
+      "display_name": "Solene Dupont",
+      "bio": "Color theory obsessed. Pastels and brutalism.",
+      "location": "Paris"
+    },
+    {
+      "handle": "driftwood",
+      "email": "driftwood@example.com",
+      "display_name": "Driftwood",
+      "bio": "Nature videographer. Slow mornings and wild coasts.",
+      "location": "Reykjavik"
+    },
+    {
+      "handle": "noor",
+      "email": "noor@example.com",
+      "display_name": "Noor Al-Rashid",
+      "bio": "Architecture and geometry. Lines tell stories.",
+      "location": "Dubai"
+    },
+    {
+      "handle": "pixel.witch",
+      "email": "pixelwitch@example.com",
+      "display_name": "Pixel Witch",
+      "bio": "Digital artist & glitch aesthetic. Breaking pixels on purpose.",
+      "location": "Berlin"
+    },
+    {
+      "handle": "ravi.lens",
+      "email": "ravi@example.com",
+      "display_name": "Ravi Kapoor",
+      "bio": "Documentary photographer. Humans first, cameras second.",
+      "location": "Mumbai"
+    },
+    {
+      "handle": "ama.sky",
+      "email": "ama@example.com",
+      "display_name": "Ama Osei",
+      "bio": "Fashion meets street culture. Accra to the world.",
+      "location": "Accra"
+    }
+  ],
+  "tags": [
+    { "name": "streetphotography", "usage_count": 12 },
+    { "name": "noir", "usage_count": 8 },
+    { "name": "synthwave", "usage_count": 6 },
+    { "name": "lofi", "usage_count": 9 },
+    { "name": "35mm", "usage_count": 7 },
+    { "name": "analog", "usage_count": 5 },
+    { "name": "architecture", "usage_count": 6 },
+    { "name": "brutalism", "usage_count": 4 },
+    { "name": "nature", "usage_count": 8 },
+    { "name": "golden-hour", "usage_count": 10 },
+    { "name": "glitch", "usage_count": 3 },
+    { "name": "pastel", "usage_count": 5 },
+    { "name": "portrait", "usage_count": 7 },
+    { "name": "fashion", "usage_count": 4 },
+    { "name": "minimal", "usage_count": 6 }
+  ],
+  "contents": [
+    {
+      "key": "luna-neon-alley",
+      "creator_handle": "lunanova",
+      "content_type": "image",
+      "body": "Neon reflections on wet pavement. Tokyo never sleeps.",
+      "tag_names": ["streetphotography", "noir", "synthwave"],
+      "hours_ago": 2
+    },
+    {
+      "key": "luna-quiet-shrine",
+      "creator_handle": "lunanova",
+      "content_type": "image",
+      "body": "Found silence in the middle of Shibuya.",
+      "tag_names": ["minimal", "golden-hour"],
+      "hours_ago": 18
+    },
+    {
+      "key": "luna-rain-text",
+      "creator_handle": "lunanova",
+      "content_type": "text",
+      "body": "There's a specific quality of light that only exists between 2am and 4am. The city breathes differently. I've been chasing it for three years now.",
+      "tag_names": ["noir"],
+      "hours_ago": 36
+    },
+    {
+      "key": "marcelo-beat-tape",
+      "creator_handle": "marcelo.wav",
+      "content_type": "video",
+      "body": "New beat tape visual. Recorded at 3am in the studio.",
+      "tag_names": ["lofi", "synthwave"],
+      "hours_ago": 5
+    },
+    {
+      "key": "marcelo-vinyl-reel",
+      "creator_handle": "marcelo.wav",
+      "content_type": "short_video",
+      "body": "Digging through crates at the flea market.",
+      "tag_names": ["lofi", "analog"],
+      "hours_ago": 24
+    },
+    {
+      "key": "marcelo-process",
+      "creator_handle": "marcelo.wav",
+      "content_type": "text",
+      "body": "The best samples are the ones you find by accident. Recorded the rain on my window last night and pitched it down two octaves. It became the backbone of the whole track.",
+      "tag_names": ["lofi"],
+      "hours_ago": 48
+    },
+    {
+      "key": "iris-darkroom",
+      "creator_handle": "iris.analog",
+      "content_type": "image",
+      "body": "Darkroom morning. Ilford HP5 pushed to 1600.",
+      "tag_names": ["35mm", "analog", "noir"],
+      "hours_ago": 8
+    },
+    {
+      "key": "iris-coast",
+      "creator_handle": "iris.analog",
+      "content_type": "image",
+      "body": "Oregon coast on Portra 400. No edits needed.",
+      "tag_names": ["35mm", "analog", "nature", "golden-hour"],
+      "hours_ago": 30
+    },
+    {
+      "key": "iris-film-thoughts",
+      "creator_handle": "iris.analog",
+      "content_type": "text",
+      "body": "Film forces you to slow down. 36 exposures means 36 decisions. Each frame costs money. That constraint makes you see differently.",
+      "tag_names": ["35mm", "analog"],
+      "hours_ago": 72
+    },
+    {
+      "key": "kai-subway",
+      "creator_handle": "kai",
+      "content_type": "image",
+      "body": "Underground geometry. L train, 3pm.",
+      "tag_names": ["streetphotography", "minimal"],
+      "hours_ago": 3
+    },
+    {
+      "key": "kai-bodega-reel",
+      "creator_handle": "kai",
+      "content_type": "short_video",
+      "body": "Corner store chronicles. Every bodega has a story.",
+      "tag_names": ["streetphotography", "portrait"],
+      "hours_ago": 12
+    },
+    {
+      "key": "kai-harlem-walk",
+      "creator_handle": "kai",
+      "content_type": "video",
+      "body": "Walking Harlem at golden hour. 20 minutes of pure light.",
+      "tag_names": ["streetphotography", "golden-hour"],
+      "hours_ago": 40
+    },
+    {
+      "key": "solene-brutalist",
+      "creator_handle": "solene",
+      "content_type": "image",
+      "body": "La Defense at dawn. Concrete poetry.",
+      "tag_names": ["architecture", "brutalism", "minimal"],
+      "hours_ago": 6
+    },
+    {
+      "key": "solene-pastel-wall",
+      "creator_handle": "solene",
+      "content_type": "image",
+      "body": "Found this wall in the 11th. Pink on grey.",
+      "tag_names": ["pastel", "minimal", "architecture"],
+      "hours_ago": 20
+    },
+    {
+      "key": "solene-color-text",
+      "creator_handle": "solene",
+      "content_type": "text",
+      "body": "Color is never neutral. A pastel pink wall next to raw concrete changes how you feel about both. Context is everything in visual composition.",
+      "tag_names": ["pastel", "architecture"],
+      "hours_ago": 50
+    },
+    {
+      "key": "drift-coast-drone",
+      "creator_handle": "driftwood",
+      "content_type": "video",
+      "body": "Black sand beach from above. The patterns the tide leaves behind.",
+      "tag_names": ["nature", "minimal"],
+      "hours_ago": 4
+    },
+    {
+      "key": "drift-northern-lights",
+      "creator_handle": "driftwood",
+      "content_type": "short_video",
+      "body": "Last night was unreal. No filter, no edit.",
+      "tag_names": ["nature", "golden-hour"],
+      "hours_ago": 14
+    },
+    {
+      "key": "drift-slow-morning",
+      "creator_handle": "driftwood",
+      "content_type": "text",
+      "body": "Woke up at 4am to catch the light. Made coffee in the dark. Sometimes the best part of the shoot is the quiet before you pick up the camera.",
+      "tag_names": ["nature"],
+      "hours_ago": 60
+    },
+    {
+      "key": "noor-mosque-geometry",
+      "creator_handle": "noor",
+      "content_type": "image",
+      "body": "Geometric patterns in the Grand Mosque. Mathematics as art.",
+      "tag_names": ["architecture", "minimal"],
+      "hours_ago": 7
+    },
+    {
+      "key": "noor-skyline-reel",
+      "creator_handle": "noor",
+      "content_type": "short_video",
+      "body": "Dubai skyline timelapse. 6 hours in 15 seconds.",
+      "tag_names": ["architecture", "golden-hour"],
+      "hours_ago": 28
+    },
+    {
+      "key": "noor-lines-text",
+      "creator_handle": "noor",
+      "content_type": "text",
+      "body": "Every building is a conversation between the architect and gravity. The best ones make gravity seem optional.",
+      "tag_names": ["architecture", "brutalism"],
+      "hours_ago": 55
+    },
+    {
+      "key": "pixel-glitch-portrait",
+      "creator_handle": "pixel.witch",
+      "content_type": "image",
+      "body": "Databent self-portrait. Your error is my aesthetic.",
+      "tag_names": ["glitch", "portrait", "synthwave"],
+      "hours_ago": 9
+    },
+    {
+      "key": "pixel-neon-loop",
+      "creator_handle": "pixel.witch",
+      "content_type": "short_video",
+      "body": "Generative neon loop. Made with custom shaders.",
+      "tag_names": ["glitch", "synthwave"],
+      "hours_ago": 22
+    },
+    {
+      "key": "pixel-process-text",
+      "creator_handle": "pixel.witch",
+      "content_type": "text",
+      "body": "Glitch art isn't random. It's controlled chaos. You break things on purpose until the accident becomes intentional. The machine and I meet somewhere in the middle.",
+      "tag_names": ["glitch"],
+      "hours_ago": 44
+    },
+    {
+      "key": "ravi-market-faces",
+      "creator_handle": "ravi.lens",
+      "content_type": "image",
+      "body": "Morning market faces. Everyone has a story if you wait long enough.",
+      "tag_names": ["portrait", "streetphotography"],
+      "hours_ago": 10
+    },
+    {
+      "key": "ravi-monsoon-doc",
+      "creator_handle": "ravi.lens",
+      "content_type": "video",
+      "body": "Monsoon season mini-doc. Water changes everything about a city.",
+      "tag_names": ["streetphotography", "nature"],
+      "hours_ago": 32
+    },
+    {
+      "key": "ravi-documentary-text",
+      "creator_handle": "ravi.lens",
+      "content_type": "text",
+      "body": "Documentary photography is 90% listening and 10% clicking the shutter. The camera is just the excuse to be present in someone else's world for a moment.",
+      "tag_names": ["portrait", "streetphotography"],
+      "hours_ago": 68
+    },
+    {
+      "key": "ama-streetwear",
+      "creator_handle": "ama.sky",
+      "content_type": "image",
+      "body": "New collection shoot. Ankara meets streetwear.",
+      "tag_names": ["fashion", "portrait", "streetphotography"],
+      "hours_ago": 6
+    },
+    {
+      "key": "ama-golden-editorial",
+      "creator_handle": "ama.sky",
+      "content_type": "short_video",
+      "body": "Behind the scenes of yesterday's editorial. Golden hour did all the work.",
+      "tag_names": ["fashion", "golden-hour", "portrait"],
+      "hours_ago": 16
+    },
+    {
+      "key": "ama-fashion-text",
+      "creator_handle": "ama.sky",
+      "content_type": "text",
+      "body": "Fashion photography in Accra is different. The colors are louder, the textures are bolder, the energy is unapologetic. I wouldn't shoot anywhere else.",
+      "tag_names": ["fashion"],
+      "hours_ago": 42
+    }
+  ],
+  "reactions": [
+    { "user_handle": "marcelo.wav", "content_key": "luna-neon-alley", "kind": "my_aesthetic" },
+    { "user_handle": "pixel.witch", "content_key": "luna-neon-alley", "kind": "gave_me_energy" },
+    { "user_handle": "kai", "content_key": "luna-neon-alley", "kind": "on_repeat" },
+    { "user_handle": "lunanova", "content_key": "marcelo-beat-tape", "kind": "calmed_me" },
+    { "user_handle": "pixel.witch", "content_key": "marcelo-beat-tape", "kind": "my_aesthetic" },
+    { "user_handle": "iris.analog", "content_key": "iris-coast", "kind": "calmed_me" },
+    { "user_handle": "driftwood", "content_key": "iris-coast", "kind": "my_aesthetic" },
+    { "user_handle": "lunanova", "content_key": "iris-darkroom", "kind": "my_aesthetic" },
+    { "user_handle": "kai", "content_key": "kai-subway", "kind": "gave_me_energy" },
+    { "user_handle": "solene", "content_key": "kai-subway", "kind": "my_aesthetic" },
+    { "user_handle": "noor", "content_key": "solene-brutalist", "kind": "my_aesthetic" },
+    { "user_handle": "solene", "content_key": "noor-mosque-geometry", "kind": "surprised_me" },
+    { "user_handle": "kai", "content_key": "solene-pastel-wall", "kind": "calmed_me" },
+    { "user_handle": "lunanova", "content_key": "drift-coast-drone", "kind": "calmed_me" },
+    { "user_handle": "iris.analog", "content_key": "drift-coast-drone", "kind": "calmed_me" },
+    { "user_handle": "driftwood", "content_key": "drift-northern-lights", "kind": "gave_me_energy" },
+    { "user_handle": "marcelo.wav", "content_key": "pixel-glitch-portrait", "kind": "surprised_me" },
+    { "user_handle": "lunanova", "content_key": "pixel-neon-loop", "kind": "on_repeat" },
+    { "user_handle": "pixel.witch", "content_key": "pixel-neon-loop", "kind": "gave_me_energy" },
+    { "user_handle": "ama.sky", "content_key": "ravi-market-faces", "kind": "gave_me_energy" },
+    { "user_handle": "kai", "content_key": "ravi-market-faces", "kind": "my_aesthetic" },
+    { "user_handle": "ravi.lens", "content_key": "ama-streetwear", "kind": "gave_me_energy" },
+    { "user_handle": "solene", "content_key": "ama-streetwear", "kind": "my_aesthetic" },
+    { "user_handle": "pixel.witch", "content_key": "ama-golden-editorial", "kind": "on_repeat" },
+    { "user_handle": "iris.analog", "content_key": "luna-quiet-shrine", "kind": "calmed_me" },
+    { "user_handle": "driftwood", "content_key": "luna-quiet-shrine", "kind": "calmed_me" },
+    { "user_handle": "marcelo.wav", "content_key": "kai-harlem-walk", "kind": "calmed_me" },
+    { "user_handle": "noor", "content_key": "kai-harlem-walk", "kind": "gave_me_energy" },
+    { "user_handle": "ravi.lens", "content_key": "noor-skyline-reel", "kind": "surprised_me" },
+    { "user_handle": "ama.sky", "content_key": "solene-pastel-wall", "kind": "my_aesthetic" },
+    { "user_handle": "lunanova", "content_key": "ravi-monsoon-doc", "kind": "surprised_me" },
+    { "user_handle": "iris.analog", "content_key": "ravi-monsoon-doc", "kind": "gave_me_energy" },
+    { "user_handle": "noor", "content_key": "drift-coast-drone", "kind": "my_aesthetic" },
+    { "user_handle": "kai", "content_key": "ama-streetwear", "kind": "gave_me_energy" },
+    { "user_handle": "marcelo.wav", "content_key": "iris-darkroom", "kind": "calmed_me" },
+    { "user_handle": "solene", "content_key": "noor-lines-text", "kind": "my_aesthetic" },
+    { "user_handle": "pixel.witch", "content_key": "luna-rain-text", "kind": "my_aesthetic" },
+    { "user_handle": "driftwood", "content_key": "iris-film-thoughts", "kind": "calmed_me" },
+    { "user_handle": "ravi.lens", "content_key": "kai-bodega-reel", "kind": "gave_me_energy" },
+    { "user_handle": "ama.sky", "content_key": "pixel-process-text", "kind": "surprised_me" }
+  ],
+  "follows": [
+    { "follower_handle": "lunanova", "followee_handle": "marcelo.wav" },
+    { "follower_handle": "lunanova", "followee_handle": "iris.analog" },
+    { "follower_handle": "marcelo.wav", "followee_handle": "lunanova" },
+    { "follower_handle": "marcelo.wav", "followee_handle": "pixel.witch" },
+    { "follower_handle": "iris.analog", "followee_handle": "driftwood" },
+    { "follower_handle": "iris.analog", "followee_handle": "lunanova" },
+    { "follower_handle": "kai", "followee_handle": "ravi.lens" },
+    { "follower_handle": "kai", "followee_handle": "ama.sky" },
+    { "follower_handle": "solene", "followee_handle": "noor" },
+    { "follower_handle": "noor", "followee_handle": "solene" },
+    { "follower_handle": "driftwood", "followee_handle": "iris.analog" },
+    { "follower_handle": "pixel.witch", "followee_handle": "marcelo.wav" },
+    { "follower_handle": "pixel.witch", "followee_handle": "lunanova" },
+    { "follower_handle": "ravi.lens", "followee_handle": "kai" },
+    { "follower_handle": "ama.sky", "followee_handle": "ravi.lens" }
+  ],
+  "rooms": [
+    {
+      "cluster_key": "night-city-vibes-2024-01-15",
+      "tag_names": ["noir", "synthwave", "streetphotography"],
+      "member_handles": ["lunanova", "marcelo.wav", "pixel.witch", "kai"],
+      "expires_in_hours": 20
+    },
+    {
+      "cluster_key": "analog-warmth-2024-01-15",
+      "tag_names": ["35mm", "analog", "golden-hour"],
+      "member_handles": ["iris.analog", "driftwood", "lunanova"],
+      "expires_in_hours": 18
+    },
+    {
+      "cluster_key": "concrete-forms-2024-01-15",
+      "tag_names": ["architecture", "brutalism", "minimal"],
+      "member_handles": ["solene", "noor"],
+      "expires_in_hours": 22
+    }
+  ],
+  "paths": [
+    {
+      "creator_handle": "lunanova",
+      "title": "Tokyo After Dark",
+      "description": "A visual journey through Tokyo's neon-lit streets and hidden corners after midnight.",
+      "hours_ago": 12,
+      "items": [
+        { "content_key": "luna-neon-alley", "note": "Start here. The alley that started everything." },
+        { "content_key": "luna-quiet-shrine", "note": "Contrast. The silence you find between the noise." },
+        { "content_key": "luna-rain-text", "note": "Why I keep coming back to these streets." }
+      ],
+      "follower_handles": ["marcelo.wav", "pixel.witch", "kai"]
+    },
+    {
+      "creator_handle": "iris.analog",
+      "title": "Why Film Still Matters",
+      "description": "From darkroom to daylight. A path through the analog process and why constraints create better art.",
+      "hours_ago": 48,
+      "items": [
+        { "content_key": "iris-darkroom", "note": "Where it all begins. The magic of chemistry." },
+        { "content_key": "iris-coast", "note": "Portra 400 does things digital can't touch." },
+        { "content_key": "iris-film-thoughts", "note": "The philosophy behind the practice." }
+      ],
+      "follower_handles": ["lunanova", "driftwood"]
+    }
+  ]
+}
