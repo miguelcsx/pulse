@@ -1,4 +1,4 @@
-import type { PaginatedResponse, Path, PathCreate } from "@pulse/drift/types";
+import type { PaginatedResponse, Path } from "@pulse/drift/types";
 import client from "./client";
 
 export async function getPaths(
@@ -18,11 +18,6 @@ export async function getPaths(
 
 export async function getPath(id: string): Promise<Path> {
   const response = await client.get<Path>(`/paths/${id}`);
-  return response.data;
-}
-
-export async function createPath(data: PathCreate): Promise<Path> {
-  const response = await client.post<Path>("/paths", data);
   return response.data;
 }
 
