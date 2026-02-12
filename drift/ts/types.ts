@@ -110,12 +110,32 @@ export const REACTION_LABELS: Record<ReactionKind, string> = {
   my_aesthetic: "My aesthetic",
 };
 
+// Room context for feed items
+export interface RoomContext {
+  room_id: string;
+  tags: string[];
+  member_count: number;
+}
+
+// Feed item with optional room context
+export interface FeedItem extends Content {
+  room_context?: RoomContext;
+}
+
 // Feed
 export interface FeedResponse {
-  items: Content[];
+  items: FeedItem[];
   next_cursor: string;
   has_more: boolean;
+  suggestions?: Suggestion[];
 }
+
+// Suggestion types — buckets for discovery
+export type SuggestionType =
+  | "closest_twin"    // behavioral affinity (dwell/reactions)
+  | "adjacent_taste"  // tag overlap
+  | "path_affinity"   // followed 2+ paths from same creator
+  | "serendipity";    // different profile, 1 strong bridge
 
 // Social — suggestions with Bridges (why you connect)
 export interface Suggestion {
@@ -124,6 +144,18 @@ export interface Suggestion {
   common_tags: Tag[];
   bridge: string; // human-readable explanation of why you connect
   affinity_score?: number;
+  suggestion_type?: SuggestionType;
+  path_count?: number;
+}
+
+// Discover — aggregated endpoint
+export interface DiscoverResponse {
+  suggestions: Suggestion[];
+  closest_twins?: Suggestion[];
+  adjacent_taste?: Suggestion[];
+  serendipity?: Suggestion[];
+  rooms: Room[];
+  paths: Path[];
 }
 
 // Rooms — mood rooms for co-consumption
@@ -149,6 +181,7 @@ export interface Path {
   creator: User;
   title: string;
   description: string;
+  system_generated?: boolean;
   items: PathItem[];
   follower_count: number;
   is_following?: boolean;
@@ -161,12 +194,6 @@ export interface PathItem {
   content: Content;
   position: number;
   note: string;
-}
-
-export interface PathCreate {
-  title: string;
-  description: string;
-  items: { content_id: string; note: string }[];
 }
 
 // Events — user activity for affinity graph
