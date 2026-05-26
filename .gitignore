@@ -1,9 +1,11 @@
 # Dependencies
 node_modules/
-
+inspo/*
+docs/*
 # Build outputs
 dist/
 build/
+stone/bin/
 *.exe
 *.exe~
 *.dll
@@ -17,6 +19,17 @@ stone/uploads/
 !stone/uploads/
 !stone/uploads/demo/
 !stone/uploads/demo/*
+
+# Nix
+result
+result-*
+.direnv/
+
+# Local infrastructure data (postgres, redis)
+.data/
+
+# Flake locks are per-folder — tracked individually
+# (each component's flake.lock is committed)
 
 # Environment
 .env

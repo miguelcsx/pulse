@@ -95,15 +95,8 @@ cd pulse
 cp stone/.env.example stone/.env
 # Edit stone/.env with your DATABASE_URL, REDIS_URL, JWT_SECRET
 
-# 3. Start services (PostgreSQL + Redis)
-make services
-
-# 4. Run migrations & seed demo data
-make migrate
-make seed
-
-# 5. Start all servers
-make local
+# 3. Prepare demo data and start all servers
+make demo
 ```
 
 **That's it.** Open http://localhost:5173 and log in with:
@@ -199,8 +192,11 @@ The goal: **meaningful connections through shared taste, not infinite scroll.**
 ### Local development
 
 ```bash
-# All-in-one TUI
+# All-in-one TUI (starts infrastructure, runs migrations, and launches API + PWA + landing)
 make local
+
+# Reset demo data, then launch everything
+make demo
 
 # Or separate terminals
 make dev-stone      # Backend on :8080
@@ -235,12 +231,12 @@ cd grove && npm run build
 
 ```env
 # Required
-DATABASE_URL=postgresql://user:pass@localhost:5432/pulse_dev
-REDIS_URL=redis://localhost:6379
+DATABASE_URL=postgres://pulse@127.0.0.1:5433/pulse_dev?sslmode=disable
+REDIS_URL=redis://127.0.0.1:6379/0
 JWT_SECRET=your-secret-key-min-32-chars
 
 # Optional
-CORS_ORIGINS=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174
 STORAGE_PATH=./uploads
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=qwen3-embedding

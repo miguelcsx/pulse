@@ -1,4 +1,4 @@
-.PHONY: local dev dev-stone dev-ember dev-grove build test migrate seed clean services services-stop services-status
+.PHONY: local demo dev dev-stone dev-ember dev-grove build test migrate seed seed-reset clean services services-stop services-status
 
 # ── Infrastructure (Nix) ─────────────────────────────────────────────────────
 services:
@@ -18,10 +18,13 @@ build-stone:
 	nix run ./stone#stone-build
 
 migrate:
-	nix run ./stone#stone-migrate
+	nix run ./stone#stone-migrate -- $(ARGS)
 
 seed:
-	nix run ./stone#stone-seed
+	nix run ./stone#stone-seed -- $(ARGS)
+
+seed-reset:
+	nix run ./stone#stone-seed -- --reset
 
 # ── Frontend ─────────────────────────────────────────────────────────────────
 dev-ember:
@@ -33,6 +36,8 @@ dev-grove:
 # ── All-in-one ───────────────────────────────────────────────────────────────
 local:
 	nix run ./stone#stone-local
+
+demo: services migrate seed-reset local
 
 dev:
 	@echo "Run in separate terminals:"

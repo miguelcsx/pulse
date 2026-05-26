@@ -8,6 +8,7 @@ pkgs.writeShellApplication {
 
     pkgs.bash
     pkgs.mprocs
+    pkgs.nodejs_22
   ];
   text = builtins.readFile ./main.sh;
 }

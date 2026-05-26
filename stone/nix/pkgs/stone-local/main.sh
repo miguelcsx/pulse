@@ -19,6 +19,19 @@ echo "[INFO] Running database migrations"
 cd "${ROOT}/stone" && go run ./cmd/migrate
 cd "${ROOT}"
 
+# ── Ensure frontend dependencies are present ─────────────────────────────────
+if [ ! -d "${ROOT}/ember/node_modules" ]; then
+  echo "[INFO] Installing ember dependencies"
+  cd "${ROOT}/ember" && npm ci
+  cd "${ROOT}"
+fi
+
+if [ ! -d "${ROOT}/grove/node_modules" ]; then
+  echo "[INFO] Installing grove dependencies"
+  cd "${ROOT}/grove" && npm ci
+  cd "${ROOT}"
+fi
+
 # ── Generate mprocs config ────────────────────────────────────────────────────
 MPROCS_CONFIG="$(mktemp /tmp/pulse-mprocs-XXXXXX.yaml)"
 trap 'rm -f "${MPROCS_CONFIG}"' EXIT
@@ -27,11 +40,17 @@ cat > "${MPROCS_CONFIG}" << YAML
 procs:
   stone:
     cmd: ["bash", "-c", "cd ${ROOT}/stone && ENV='${ENV}' DATABASE_URL='${DATABASE_URL}' REDIS_URL='${REDIS_URL}' JWT_SECRET='${JWT_SECRET}' CORS_ORIGINS='${CORS_ORIGINS}' WS_ORIGINS='${WS_ORIGINS}' go run ./cmd/server"]
+  ember:
+    cmd: ["bash", "-c", "cd ${ROOT}/ember && VITE_DEV_BACKEND_ORIGIN='http://localhost:8080' npm run dev -- --host 127.0.0.1"]
+  grove:
+    cmd: ["bash", "-c", "cd ${ROOT}/grove && npm run dev -- --host 127.0.0.1"]
 YAML
 
 # ── Launch mprocs ─────────────────────────────────────────────────────────────
 echo ""
 echo "  stone  http://localhost:8080  (Go API)"
+echo "  ember  http://localhost:5173  (Pulse app)"
+echo "  grove  http://localhost:5174  (Landing page)"
 echo ""
 
 mprocs --config "${MPROCS_CONFIG}"

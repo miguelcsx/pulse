@@ -40,26 +40,28 @@ En `/stone/.env` (crea el archivo si no existe):
 
 ```env
 # Database & Cache
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/pulse_dev
-REDIS_URL=redis://localhost:6379
+DATABASE_URL=postgres://pulse@127.0.0.1:5433/pulse_dev?sslmode=disable
+REDIS_URL=redis://127.0.0.1:6379/0
 
 # Authentication
 JWT_SECRET=your-secret-key-change-this-in-production-at-least-32-chars
 
 # API
-CORS_ORIGINS=http://localhost:5173,http://localhost:5174
-WS_ORIGINS=http://localhost:5173,http://localhost:5174
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
+WS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174
 
 # Storage
 STORAGE_PATH=./uploads
-STORAGE_BASE_URL=http://localhost:8080
+STORAGE_BASE_URL=/uploads
 
 # Ollama (opcional)
 # OLLAMA_BASE_URL=http://localhost:11434
 # OLLAMA_MODEL=qwen3-embedding
 ```
 
-**Nota:** El proyecto también necesita que crees la base de datos:
+**Nota:** si usas `make services`, la base local `pulse_dev` se crea automáticamente en el PostgreSQL administrado por Nix, en el puerto `5433`.
+
+Si usas PostgreSQL manual en otro puerto, crea la base y ajusta `DATABASE_URL`:
 
 ```bash
 createdb pulse_dev
@@ -127,7 +129,7 @@ make seed
 **Para resetear (limpiar todo antes de insertar):**
 
 ```bash
-make seed -- --reset
+make seed-reset
 ```
 
 ---
@@ -180,6 +182,18 @@ Landing page en `http://localhost:5174`
 - **Password:** `pulse-demo-2024`
 
 O regístrate con un nuevo usuario.
+
+---
+
+## Demo completo
+
+Para dejar el entorno en estado conocido y abrir el demo en un solo comando:
+
+```bash
+make demo
+```
+
+Esto inicia PostgreSQL + Redis, aplica migraciones, resetea e inserta el fixture demo, y abre el TUI con backend + frontend + landing.
 
 ---
 
@@ -245,7 +259,7 @@ Contiene:
 Puedes editar este JSON para customizar los datos de prueba. Para aplicar cambios:
 
 ```bash
-make seed -- --reset  # Limpia y reinsertta
+make seed-reset  # Limpia y reinserta
 ```
 
 ---
