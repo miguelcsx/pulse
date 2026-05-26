@@ -10,7 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/pulse/stone/internal/middleware"
-	"github.com/pulse/stone/internal/service"
 )
 
 func (s *Server) GetFeed(c *gin.Context) {
@@ -39,16 +38,9 @@ func (s *Server) GetFeed(c *gin.Context) {
 		return
 	}
 
-	// Inject suggestions on first page only
-	var suggestions []service.SuggestionResult
-	if cursor == "" {
-		suggestions, _ = s.affinityService.GetSuggestions(userID, 3)
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"items":       items,
 		"next_cursor": nextCursor,
 		"has_more":    hasMore,
-		"suggestions": suggestions,
 	})
 }

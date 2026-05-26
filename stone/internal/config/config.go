@@ -14,11 +14,6 @@ type Config struct {
 
 	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
 
-	Neo4jURI      string `envconfig:"NEO4J_URI" required:"true"`
-	Neo4jUser     string `envconfig:"NEO4J_USER" default:"neo4j"`
-	Neo4jPassword string `envconfig:"NEO4J_PASSWORD" required:"true"`
-	Neo4jDatabase string `envconfig:"NEO4J_DATABASE" default:"pulse"`
-
 	RedisURL string `envconfig:"REDIS_URL" required:"true"`
 
 	JWTSecret                 string        `envconfig:"JWT_SECRET" required:"true"`
@@ -94,8 +89,9 @@ type Config struct {
 	VectorTopK          int `envconfig:"VECTOR_TOP_K" default:"12"`
 
 	// Local AI (Ollama for semantic embeddings)
-	OllamaBaseURL string `envconfig:"OLLAMA_BASE_URL" default:"http://localhost:11434"`
-	OllamaModel   string `envconfig:"OLLAMA_MODEL" default:"qwen3-embedding"`
+	OllamaBaseURL string        `envconfig:"OLLAMA_BASE_URL" default:"http://localhost:11434"`
+	OllamaModel   string        `envconfig:"OLLAMA_MODEL" default:"qwen3-embedding"`
+	OllamaTimeout time.Duration `envconfig:"OLLAMA_TIMEOUT" default:"2s"`
 
 	// Affinity decay half-lives (in days)
 	AffinityHalfLife7DDays  float64 `envconfig:"AFFINITY_HALF_LIFE_7D_DAYS" default:"3.5"`
@@ -186,15 +182,6 @@ func (c *Config) validate() error {
 	if strings.TrimSpace(c.DatabaseURL) == "" {
 		return fmt.Errorf("DATABASE_URL is required")
 	}
-	if strings.TrimSpace(c.Neo4jURI) == "" {
-		return fmt.Errorf("NEO4J_URI is required")
-	}
-	if strings.TrimSpace(c.Neo4jUser) == "" {
-		return fmt.Errorf("NEO4J_USER is required")
-	}
-	if strings.TrimSpace(c.Neo4jPassword) == "" {
-		return fmt.Errorf("NEO4J_PASSWORD is required")
-	}
 	if strings.TrimSpace(c.RedisURL) == "" {
 		return fmt.Errorf("REDIS_URL is required")
 	}
@@ -220,6 +207,9 @@ func (c *Config) validate() error {
 	}
 	if c.VectorTopK <= 0 {
 		return fmt.Errorf("VECTOR_TOP_K must be > 0")
+	}
+	if c.OllamaTimeout <= 0 {
+		return fmt.Errorf("OLLAMA_TIMEOUT must be > 0")
 	}
 	if c.RoomExplorationRatio < 0 || c.RoomExplorationRatio >= 1 {
 		return fmt.Errorf("ROOM_EXPLORATION_RATIO must be >= 0 and < 1")

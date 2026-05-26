@@ -28,14 +28,17 @@ type seedOptions struct {
 }
 
 type demoFixture struct {
-	Password  string            `json:"password"`
-	Users     []fixtureUser     `json:"users"`
-	Tags      []fixtureTag      `json:"tags"`
-	Contents  []fixtureContent  `json:"contents"`
-	Reactions []fixtureReaction `json:"reactions"`
-	Follows   []fixtureFollow   `json:"follows"`
-	Rooms     []fixtureRoom     `json:"rooms"`
-	Paths     []fixturePath     `json:"paths"`
+	Password      string                `json:"password"`
+	Users         []fixtureUser         `json:"users"`
+	Tags          []fixtureTag          `json:"tags"`
+	Contents      []fixtureContent      `json:"contents"`
+	Reactions     []fixtureReaction     `json:"reactions"`
+	Follows       []fixtureFollow       `json:"follows"`
+	TrustProfiles []fixtureTrustProfile `json:"trust_profiles"`
+	Asks          []fixtureAsk          `json:"asks"`
+	Rooms         []fixtureRoom         `json:"rooms"`
+	HelpSessions  []fixtureHelpSession  `json:"help_sessions"`
+	Paths         []fixturePath         `json:"paths"`
 }
 
 type fixtureUser struct {
@@ -72,9 +75,36 @@ type fixtureFollow struct {
 	FolloweeHandle string `json:"followee_handle"`
 }
 
+type fixtureTrustProfile struct {
+	UserHandle      string  `json:"user_handle"`
+	Topics          string  `json:"topics"`
+	LivedExperience string  `json:"lived_experience"`
+	Availability    string  `json:"availability"`
+	HelpedCount     int     `json:"helped_count"`
+	ResponseQuality float64 `json:"response_quality"`
+}
+
+type fixtureAsk struct {
+	UserHandle      string `json:"user_handle"`
+	Question        string `json:"question"`
+	Topic           string `json:"topic"`
+	Urgency         string `json:"urgency"`
+	DesiredHelpType string `json:"desired_help_type"`
+	Visibility      string `json:"visibility"`
+	HoursAgo        int    `json:"hours_ago"`
+}
+
 type fixtureRoom struct {
 	ClusterKey     string   `json:"cluster_key"`
 	TagNames       []string `json:"tag_names"`
+	MemberHandles  []string `json:"member_handles"`
+	ExpiresInHours int      `json:"expires_in_hours"`
+}
+
+type fixtureHelpSession struct {
+	Title          string   `json:"title"`
+	Intent         string   `json:"intent"`
+	Description    string   `json:"description"`
 	MemberHandles  []string `json:"member_handles"`
 	ExpiresInHours int      `json:"expires_in_hours"`
 }
@@ -184,6 +214,12 @@ func loadFixture(path string) (*demoFixture, error) {
 func resetDemoData(db *gorm.DB) error {
 	return db.Exec(`
 		TRUNCATE TABLE
+			help_session_members,
+			help_sessions,
+			help_signals,
+			bridges,
+			asks,
+			trust_profiles,
 			path_follows,
 			path_items,
 			paths,
@@ -313,7 +349,11 @@ func seedFromFixture(db *gorm.DB, cfg *config.Config, fixture *demoFixture) erro
 			if contentType != model.ContentTypeText {
 				mediaPath := strings.TrimLeft(strings.TrimSpace(entry.MediaPath), "/")
 				if mediaPath == "" {
-					mediaPath = fmt.Sprintf("demo/%s.jpg", key)
+					extension := "jpg"
+					if contentType == model.ContentTypeVideo || contentType == model.ContentTypeShortVideo {
+						extension = "mp4"
+					}
+					mediaPath = fmt.Sprintf("demo/%s.%s", key, extension)
 				}
 				content.MediaURL = joinURL(cfg.StorageBaseURL, mediaPath)
 			}
@@ -396,6 +436,79 @@ func seedFromFixture(db *gorm.DB, cfg *config.Config, fixture *demoFixture) erro
 			}
 		}
 
+		for _, entry := range fixture.TrustProfiles {
+			user, ok := userByHandle[strings.ToLower(strings.TrimSpace(entry.UserHandle))]
+			if !ok {
+				return fmt.Errorf("unknown trust profile user_handle %q", entry.UserHandle)
+			}
+			availability := strings.ToLower(strings.TrimSpace(entry.Availability))
+			if availability == "" {
+				availability = "async"
+			}
+			profile := model.TrustProfile{
+				UserID:          user.ID,
+				Topics:          strings.TrimSpace(entry.Topics),
+				LivedExperience: strings.TrimSpace(entry.LivedExperience),
+				Availability:    availability,
+				HelpedCount:     maxInt(entry.HelpedCount, 0),
+				ResponseQuality: entry.ResponseQuality,
+				CreatedAt:       now,
+				UpdatedAt:       now,
+			}
+			if err := tx.
+				Clauses(clause.OnConflict{
+					Columns: []clause.Column{{Name: "user_id"}},
+					DoUpdates: clause.Assignments(map[string]any{
+						"topics":           profile.Topics,
+						"lived_experience": profile.LivedExperience,
+						"availability":     profile.Availability,
+						"helped_count":     profile.HelpedCount,
+						"response_quality": profile.ResponseQuality,
+						"updated_at":       now,
+					}),
+				}).
+				Create(&profile).Error; err != nil {
+				return fmt.Errorf("failed to upsert trust profile for %q: %w", entry.UserHandle, err)
+			}
+		}
+
+		for _, entry := range fixture.Asks {
+			user, ok := userByHandle[strings.ToLower(strings.TrimSpace(entry.UserHandle))]
+			if !ok {
+				return fmt.Errorf("unknown ask user_handle %q", entry.UserHandle)
+			}
+			question := strings.TrimSpace(entry.Question)
+			if question == "" {
+				return fmt.Errorf("ask question cannot be empty")
+			}
+			createdAt := now.Add(-time.Duration(maxInt(entry.HoursAgo, 0)) * time.Hour)
+			ask := model.Ask{
+				UserID:          user.ID,
+				Question:        question,
+				TriageSummary:   "Looking for human perspective from someone who has lived a similar question.",
+				Topic:           strings.TrimSpace(entry.Topic),
+				Urgency:         strings.TrimSpace(entry.Urgency),
+				DesiredHelpType: strings.TrimSpace(entry.DesiredHelpType),
+				Visibility:      strings.TrimSpace(entry.Visibility),
+				CreatedAt:       createdAt,
+				UpdatedAt:       createdAt,
+			}
+			if ask.Urgency == "" {
+				ask.Urgency = "soon"
+			}
+			if ask.DesiredHelpType == "" {
+				ask.DesiredHelpType = model.HelpTypeAdvice
+			}
+			if ask.Visibility == "" {
+				ask.Visibility = "community"
+			}
+			if err := tx.
+				Where("user_id = ? AND question = ?", user.ID, question).
+				FirstOrCreate(&ask).Error; err != nil {
+				return fmt.Errorf("failed to create ask for %q: %w", entry.UserHandle, err)
+			}
+		}
+
 		for i, entry := range fixture.Rooms {
 			clusterKey := strings.TrimSpace(entry.ClusterKey)
 			if clusterKey == "" {
@@ -438,6 +551,42 @@ func seedFromFixture(db *gorm.DB, cfg *config.Config, fixture *demoFixture) erro
 				}
 				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&roomMember).Error; err != nil {
 					return fmt.Errorf("failed to add room member %q: %w", rawHandle, err)
+				}
+			}
+		}
+
+		for _, entry := range fixture.HelpSessions {
+			title := strings.TrimSpace(entry.Title)
+			if title == "" {
+				return fmt.Errorf("help session title cannot be empty")
+			}
+			expiresInHours := maxInt(entry.ExpiresInHours, 24)
+			session := model.HelpSession{
+				Title:       title,
+				Intent:      strings.TrimSpace(entry.Intent),
+				Description: strings.TrimSpace(entry.Description),
+				ExpiresAt:   now.Add(time.Duration(expiresInHours) * time.Hour),
+				CreatedAt:   now,
+			}
+			if err := tx.Where("title = ?", title).Assign(map[string]any{
+				"intent":      session.Intent,
+				"description": session.Description,
+				"expires_at":  session.ExpiresAt,
+			}).FirstOrCreate(&session).Error; err != nil {
+				return fmt.Errorf("failed to create help session %q: %w", title, err)
+			}
+			for _, rawHandle := range entry.MemberHandles {
+				member, ok := userByHandle[strings.ToLower(strings.TrimSpace(rawHandle))]
+				if !ok {
+					return fmt.Errorf("unknown help session member handle %q", rawHandle)
+				}
+				sessionMember := model.HelpSessionMember{
+					SessionID: session.ID,
+					UserID:    member.ID,
+					JoinedAt:  now,
+				}
+				if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&sessionMember).Error; err != nil {
+					return fmt.Errorf("failed to add help session member %q: %w", rawHandle, err)
 				}
 			}
 		}

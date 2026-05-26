@@ -30,9 +30,10 @@ export default function CTA() {
         }`}
       >
         <div className="rounded-2xl bg-[var(--color-surface)] p-12 text-center">
-          <h2 className="text-3xl font-bold">Ready to find your people?</h2>
+          <h2 className="text-3xl font-bold">Need judgment, not another answer?</h2>
           <p className="mt-4 text-[var(--color-text-muted)]">
-            Join a social platform where connections are built on shared creative signals, not vanity metrics.
+            Pulse helps builders, creators, and students find the humans who can
+            give useful perspective right now.
           </p>
           <a
             href={appHref("/register")}

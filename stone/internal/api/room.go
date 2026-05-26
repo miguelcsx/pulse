@@ -38,7 +38,7 @@ func (s *Server) GetRoomContent(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	contents, err := s.roomService.GetRoomContent(c.Request.Context(), s.graph, s.embedder, roomID, userID, limit)
+	contents, err := s.roomService.GetRoomContent(roomID, userID, limit)
 	if err != nil {
 		if errors.Is(err, service.ErrRoomNotFoundOrExpired) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "room not found or expired"})

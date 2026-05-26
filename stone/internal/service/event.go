@@ -209,15 +209,15 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 			INSERT INTO user_affinity_edges (
 				user_id, other_user_id, score_7d, score_30d, last_signal_at, created_at, updated_at
 			)
-			VALUES (?, ?, GREATEST(?, 0), GREATEST(?, 0), ?, ?, ?)
+			VALUES (?, ?, GREATEST(CAST(? AS double precision), 0), GREATEST(CAST(? AS double precision), 0), ?, ?, ?)
 			ON CONFLICT (user_id, other_user_id) DO UPDATE SET
 				score_7d = GREATEST(
 					0,
-					user_affinity_edges.score_7d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - user_affinity_edges.last_signal_at)), 0)) + ?
+					user_affinity_edges.score_7d * EXP((-CAST(? AS double precision)) * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - CAST(user_affinity_edges.last_signal_at AS timestamptz))), 0)) + CAST(? AS double precision)
 				),
 				score_30d = GREATEST(
 					0,
-					user_affinity_edges.score_30d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - user_affinity_edges.last_signal_at)), 0)) + ?
+					user_affinity_edges.score_30d * EXP((-CAST(? AS double precision)) * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - CAST(user_affinity_edges.last_signal_at AS timestamptz))), 0)) + CAST(? AS double precision)
 				),
 				last_signal_at = ?,
 				updated_at = ?
@@ -237,11 +237,11 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 		SET
 			score_7d = GREATEST(
 				0,
-				user_affinity_edges.score_7d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (? - user_affinity_edges.last_signal_at)), 0)) + ?
+				user_affinity_edges.score_7d * EXP((-CAST(? AS double precision)) * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - CAST(user_affinity_edges.last_signal_at AS timestamptz))), 0)) + CAST(? AS double precision)
 			),
 			score_30d = GREATEST(
 				0,
-				user_affinity_edges.score_30d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (? - user_affinity_edges.last_signal_at)), 0)) + ?
+				user_affinity_edges.score_30d * EXP((-CAST(? AS double precision)) * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - CAST(user_affinity_edges.last_signal_at AS timestamptz))), 0)) + CAST(? AS double precision)
 			),
 			last_signal_at = ?,
 			updated_at = ?

@@ -1,12 +1,5 @@
-import type { Suggestion, UserProfile } from "@pulse/drift/types";
+import type { UserProfile } from "@pulse/drift/types";
 import client from "./client";
-
-export async function getSuggestions(limit?: number): Promise<Suggestion[]> {
-  const response = await client.get<Suggestion[]>("/suggestions", {
-    params: limit ? { limit } : undefined,
-  });
-  return response.data;
-}
 
 export async function followUser(id: string): Promise<void> {
   await client.post(`/follow/${id}`);

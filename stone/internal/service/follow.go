@@ -1,23 +1,19 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"gorm.io/gorm"
 
 	"github.com/pulse/stone/internal/model"
-	"github.com/pulse/stone/internal/store"
 )
 
 // FollowService handles follow/unfollow/block/unblock operations.
 type FollowService struct {
-	db    *gorm.DB
-	graph *store.GraphStore
+	db *gorm.DB
 }
 
 var (
@@ -25,8 +21,8 @@ var (
 )
 
 // NewFollowService creates a new FollowService.
-func NewFollowService(db *gorm.DB, graph *store.GraphStore) *FollowService {
-	return &FollowService{db: db, graph: graph}
+func NewFollowService(db *gorm.DB) *FollowService {
+	return &FollowService{db: db}
 }
 
 // Follow creates a follow relationship between follower and followee.
@@ -52,9 +48,6 @@ func (s *FollowService) Follow(followerID, followeeID uuid.UUID) error {
 	if err := s.db.Create(&follow).Error; err != nil {
 		return fmt.Errorf("failed to create follow: %w", err)
 	}
-	if err := s.syncFollowToGraph(followerID, followeeID); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -67,9 +60,6 @@ func (s *FollowService) Unfollow(followerID, followeeID uuid.UUID) error {
 	}
 	if result.RowsAffected == 0 {
 		return errors.New("follow relationship not found")
-	}
-	if err := s.removeFollowFromGraph(followerID, followeeID); err != nil {
-		return err
 	}
 	return nil
 }
@@ -101,7 +91,7 @@ func (s *FollowService) Block(blockerID, blockedID uuid.UUID) error {
 	}); err != nil {
 		return err
 	}
-	return s.syncBlockToGraph(blockerID, blockedID)
+	return nil
 }
 
 // Unblock removes the block relationship.
@@ -113,9 +103,6 @@ func (s *FollowService) Unblock(blockerID, blockedID uuid.UUID) error {
 	}
 	if result.RowsAffected == 0 {
 		return errors.New("block relationship not found")
-	}
-	if err := s.removeBlockFromGraph(blockerID, blockedID); err != nil {
-		return err
 	}
 	return nil
 }
@@ -153,100 +140,4 @@ func (s *FollowService) isBlockedEitherDirection(userA, userB uuid.UUID) (bool, 
 		return false, fmt.Errorf("failed to check block relationship: %w", err)
 	}
 	return count > 0, nil
-}
-
-func (s *FollowService) syncFollowToGraph(followerID, followeeID uuid.UUID) error {
-	if s.graph == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	query := `
-		MERGE (a:User {id: $followerID})
-		MERGE (b:User {id: $followeeID})
-		MERGE (a)-[:FOLLOWS]->(b)
-	`
-	params := map[string]any{
-		"followerID": followerID.String(),
-		"followeeID": followeeID.String(),
-	}
-
-	_, err := s.graph.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		_, err := tx.Run(ctx, query, params)
-		return nil, err
-	})
-	return err
-}
-
-func (s *FollowService) removeFollowFromGraph(followerID, followeeID uuid.UUID) error {
-	if s.graph == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	query := `
-		MATCH (a:User {id: $followerID})-[r:FOLLOWS]->(b:User {id: $followeeID})
-		DELETE r
-	`
-	params := map[string]any{
-		"followerID": followerID.String(),
-		"followeeID": followeeID.String(),
-	}
-
-	_, err := s.graph.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		_, err := tx.Run(ctx, query, params)
-		return nil, err
-	})
-	return err
-}
-
-func (s *FollowService) syncBlockToGraph(blockerID, blockedID uuid.UUID) error {
-	if s.graph == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	query := `
-		MERGE (a:User {id: $blockerID})
-		MERGE (b:User {id: $blockedID})
-		WITH a, b
-		OPTIONAL MATCH (a)-[f1:FOLLOWS]->(b)
-		DELETE f1
-		WITH a, b
-		OPTIONAL MATCH (b)-[f2:FOLLOWS]->(a)
-		DELETE f2
-		MERGE (a)-[:BLOCKS]->(b)
-	`
-	params := map[string]any{
-		"blockerID": blockerID.String(),
-		"blockedID": blockedID.String(),
-	}
-
-	_, err := s.graph.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		_, err := tx.Run(ctx, query, params)
-		return nil, err
-	})
-	return err
-}
-
-func (s *FollowService) removeBlockFromGraph(blockerID, blockedID uuid.UUID) error {
-	if s.graph == nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	query := `
-		MATCH (a:User {id: $blockerID})-[r:BLOCKS]->(b:User {id: $blockedID})
-		DELETE r
-	`
-	params := map[string]any{
-		"blockerID": blockerID.String(),
-		"blockedID": blockedID.String(),
-	}
-
-	_, err := s.graph.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
-		_, err := tx.Run(ctx, query, params)
-		return nil, err
-	})
-	return err
 }

@@ -1,54 +1,25 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDiscover } from "../api/discover";
-import SuggestionCard from "../components/social/SuggestionCard";
+import type { TodayResponse } from "@pulse/drift/types";
+import { getToday } from "../api/advice";
+import BridgeCard from "../components/advice/BridgeCard";
 import Spinner from "../components/ui/Spinner";
-import { useUiStore } from "../store/uiStore";
 import { usePageTitle } from "../hooks/usePageTitle";
-import type { DiscoverResponse, Suggestion } from "@pulse/drift/types";
-
-function SuggestionSection({
-  title,
-  subtitle,
-  suggestions,
-}: {
-  title: string;
-  subtitle: string;
-  suggestions: Suggestion[];
-}) {
-  if (suggestions.length === 0) return null;
-  return (
-    <section>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="text-xs text-[var(--color-text-muted)] mb-4">{subtitle}</p>
-      <div className="space-y-3">
-        {suggestions.map((s) => (
-          <SuggestionCard key={s.user.id} suggestion={s} />
-        ))}
-      </div>
-    </section>
-  );
-}
+import { useUiStore } from "../store/uiStore";
 
 export default function Discover() {
-  usePageTitle("Discover");
-  const [data, setData] = useState<DiscoverResponse | null>(null);
+  usePageTitle("Affinity Map");
+  const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const addToast = useUiStore((s) => s.addToast);
 
   useEffect(() => {
     let cancelled = false;
-    getDiscover()
+    getToday()
       .then((res) => {
         if (!cancelled) setData(res);
       })
-      .catch(() => {
-        if (!cancelled) {
-          setError("Failed to load discover");
-          addToast("Failed to load discover", "error");
-        }
-      })
+      .catch(() => addToast("Failed to load affinity map", "error"))
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -65,147 +36,78 @@ export default function Discover() {
     );
   }
 
-  if (error || !data) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-[var(--color-error)]">{error}</p>
-      </div>
-    );
-  }
-
-  const hasBuckets =
-    (data.closest_twins?.length ?? 0) > 0 ||
-    (data.adjacent_taste?.length ?? 0) > 0 ||
-    (data.serendipity?.length ?? 0) > 0;
-
-  // Check for path_affinity suggestions in the flat list
-  const pathSuggestions = data.suggestions.filter(
-    (s) => s.suggestion_type === "path_affinity",
-  );
-  const nonPathSuggestions = data.suggestions.filter(
-    (s) => s.suggestion_type !== "path_affinity",
-  );
+  const bridges = data?.bridges ?? [];
+  const sessions = data?.help_sessions ?? [];
 
   return (
-    <div className="space-y-8">
-      {/* Path Connections */}
-      {pathSuggestions.length > 0 && (
-        <SuggestionSection
-          title="Path Connections"
-          subtitle="People whose paths resonate with you"
-          suggestions={pathSuggestions}
-        />
-      )}
-
-      {/* Bucketed sections when available */}
-      {hasBuckets ? (
-        <>
-          <SuggestionSection
-            title="Similar Vibes"
-            subtitle="People who experience content like you do"
-            suggestions={data.closest_twins ?? []}
-          />
-          <SuggestionSection
-            title="Shared Taste"
-            subtitle="People posting about similar things"
-            suggestions={data.adjacent_taste ?? []}
-          />
-          <SuggestionSection
-            title="Fresh Perspectives"
-            subtitle="Different style, one strong connection"
-            suggestions={data.serendipity ?? []}
-          />
-        </>
-      ) : (
-        /* Fallback: flat suggestions (backward compat) */
-        nonPathSuggestions.length > 0 && (
-          <section>
-            <h2 className="text-lg font-semibold mb-4">People You Might Like</h2>
-            <div className="space-y-3">
-              {nonPathSuggestions.map((s) => (
-                <SuggestionCard key={s.user.id} suggestion={s} />
-              ))}
-            </div>
-          </section>
-        )
-      )}
-
-      {!hasBuckets && nonPathSuggestions.length === 0 && pathSuggestions.length === 0 && (
-        <section>
-          <h2 className="text-lg font-semibold mb-4">People You Might Like</h2>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Post content with hashtags to get personalized suggestions
-          </p>
-        </section>
-      )}
-
-      {/* Active Vibes */}
+    <div className="space-y-7">
       <section>
-        <h2 className="text-lg font-semibold mb-4">Active Vibes</h2>
-        {data.rooms.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">
-            No active rooms right now
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+          Affinity map
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold">
+          Your current advice graph
+        </h1>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+          Bridges, live contexts, and your trust profile are built from asks and
+          help signals, not follower-count ranking.
+        </p>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <p className="text-2xl font-semibold">{bridges.length}</p>
+          <p className="text-xs text-[var(--color-text-muted)]">active bridges</p>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <p className="text-2xl font-semibold">{sessions.length}</p>
+          <p className="text-xs text-[var(--color-text-muted)]">live rooms</p>
+        </div>
+        <div className="rounded-lg border border-[var(--color-border)] p-4">
+          <p className="text-2xl font-semibold">
+            {data?.trust_profile?.helped_count ?? 0}
           </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {data.rooms.map((room) => (
-              <Link
-                key={room.id}
-                to={`/rooms/${room.id}`}
-                className="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  <span className="text-xs text-[var(--color-text-muted)]">
-                    {room.member_count} {room.member_count === 1 ? "person" : "people"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {room.tags?.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-tag-bg)] text-[var(--color-tag-text)]"
-                    >
-                      #{tag.name}
-                    </span>
-                  ))}
-                </div>
-              </Link>
-            ))}
+          <p className="text-xs text-[var(--color-text-muted)]">people helped</p>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Human bridges</h2>
+        {bridges.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-[var(--color-border)] p-5">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              No bridges yet. Start with an ask on Today.
+            </p>
+            <Link
+              to="/"
+              className="mt-3 inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+            >
+              Create ask
+            </Link>
           </div>
+        ) : (
+          bridges.map((bridge) => <BridgeCard key={bridge.id} bridge={bridge} />)
         )}
       </section>
 
-      {/* Paths to Explore */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Paths to Explore</h2>
-        {data.paths.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">
-            No paths available yet
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {data.paths.map((path) => (
-              <Link
-                key={path.id}
-                to={`/paths/${path.id}`}
-                className="block bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)] hover:border-[var(--color-primary)] transition-colors"
-              >
-                <h3 className="font-medium text-sm">{path.title}</h3>
-                {path.description && (
-                  <p className="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">
-                    {path.description}
-                  </p>
-                )}
-                <div className="flex items-center gap-3 mt-2 text-xs text-[var(--color-text-muted)]">
-                  <span>{path.items?.length || 0} items</span>
-                  <span>{path.follower_count} followers</span>
-                  {path.creator && <span>by {path.creator.display_name}</span>}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Live contexts</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {sessions.map((session) => (
+            <article
+              key={session.id}
+              className="rounded-lg border border-[var(--color-border)] p-4"
+            >
+              <p className="text-sm font-semibold">{session.title}</p>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                {session.description}
+              </p>
+              <p className="mt-3 text-xs text-[var(--color-text-muted)]">
+                {session.member_count} inside
+              </p>
+            </article>
+          ))}
+        </div>
       </section>
     </div>
   );

@@ -8,7 +8,7 @@ export default function Register() {
           Pulse
         </h1>
         <p className="text-center text-sm text-[var(--color-text-muted)] mb-8">
-          Connect through moments
+          Find the human who lived your question
         </p>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8">
           <RegisterForm />

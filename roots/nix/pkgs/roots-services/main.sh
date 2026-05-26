@@ -7,8 +7,8 @@ function usage {
   echo "  Usage: roots-services <command>"
   echo ""
   echo "  Commands:"
-  echo "    start    Start PostgreSQL, Redis, and Neo4j"
-  echo "    stop     Stop PostgreSQL, Redis, and Neo4j"
+  echo "    start    Start PostgreSQL and Redis"
+  echo "    stop     Stop PostgreSQL and Redis"
   echo "    status   Show service status"
   echo "    restart  Restart all services"
   echo ""
@@ -17,7 +17,6 @@ function usage {
 function status_services {
   local pg_port="${PULSE_PG_PORT:-5433}"
   local redis_port="${PULSE_REDIS_PORT:-6379}"
-  local neo4j_port="${PULSE_NEO4J_BOLT_PORT:-7687}"
 
   echo ""
   echo "  Pulse infrastructure status"
@@ -35,12 +34,6 @@ function status_services {
     echo "  Redis ......... ✗ stopped"
   fi
 
-  if (echo > /dev/tcp/127.0.0.1/"${neo4j_port}") >/dev/null 2>&1; then
-    echo "  Neo4j ......... ✓ running on :${neo4j_port}"
-  else
-    echo "  Neo4j ......... ✗ stopped"
-  fi
-
   echo ""
 }
 
@@ -51,7 +44,6 @@ function start_services {
   roots-db-start
   roots-db-create
   roots-redis-start
-  roots-neo4j-start
 
   echo ""
   echo "[INFO] All services started"
@@ -64,7 +56,6 @@ function stop_services {
 
   roots-redis-stop
   roots-db-stop
-  roots-neo4j-stop
 
   echo ""
   echo "[INFO] All services stopped"

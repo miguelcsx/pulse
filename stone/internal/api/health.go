@@ -27,17 +27,6 @@ func (s *Server) Health(c *gin.Context) {
 		checks["postgres"] = "ok"
 	}
 
-	// Check Neo4j
-	if s.graph == nil {
-		status = "degraded"
-		checks["neo4j"] = "error: graph store not configured"
-	} else if err := s.graph.Driver.VerifyConnectivity(ctx); err != nil {
-		status = "degraded"
-		checks["neo4j"] = "error: " + err.Error()
-	} else {
-		checks["neo4j"] = "ok"
-	}
-
 	// Check Redis
 	if err := s.redis.Ping(ctx).Err(); err != nil {
 		status = "degraded"

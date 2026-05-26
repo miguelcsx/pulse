@@ -5,12 +5,10 @@ let
   roots-db-create = pkgs.callPackage ./roots-db-create { inherit lib'; };
   roots-redis-start = pkgs.callPackage ./roots-redis-start { };
   roots-redis-stop = pkgs.callPackage ./roots-redis-stop { };
-  roots-neo4j-start = pkgs.callPackage ./roots-neo4j-start { inherit lib'; };
-  roots-neo4j-stop = pkgs.callPackage ./roots-neo4j-stop { };
 in {
-  inherit roots-db-start roots-db-stop roots-db-create roots-redis-start roots-redis-stop roots-neo4j-start roots-neo4j-stop;
+  inherit roots-db-start roots-db-stop roots-db-create roots-redis-start roots-redis-stop;
   roots-services = pkgs.callPackage ./roots-services {
-    inherit lib' roots-db-start roots-db-stop roots-db-create roots-redis-start roots-redis-stop roots-neo4j-start roots-neo4j-stop;
+    inherit lib' roots-db-start roots-db-stop roots-db-create roots-redis-start roots-redis-stop;
   };
   roots-sops = pkgs.callPackage ./roots-sops { };
 }

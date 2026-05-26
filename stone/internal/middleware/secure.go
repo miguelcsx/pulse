@@ -22,7 +22,7 @@ func SecureHeadersWithEnv(env string) gin.HandlerFunc {
 		// Prevent clickjacking
 		c.Header("X-Frame-Options", "DENY")
 
-		// Legacy XSS filter (still useful for older browsers)
+		// Browser XSS filter for older clients that still honor it.
 		c.Header("X-XSS-Protection", "1; mode=block")
 
 		// Control referrer information leakage

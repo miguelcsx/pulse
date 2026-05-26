@@ -17,6 +17,7 @@ export interface UserProfile extends User {
   content_count: number;
   is_following?: boolean;
   is_blocked?: boolean;
+  trust_profile?: TrustProfile;
 }
 
 // Auth
@@ -127,35 +128,105 @@ export interface FeedResponse {
   items: FeedItem[];
   next_cursor: string;
   has_more: boolean;
-  suggestions?: Suggestion[];
 }
 
-// Suggestion types — buckets for discovery
-export type SuggestionType =
-  | "closest_twin"    // behavioral affinity (dwell/reactions)
-  | "adjacent_taste"  // tag overlap
-  | "path_affinity"   // followed 2+ paths from same creator
-  | "serendipity";    // different profile, 1 strong bridge
+// Human advice network
+export type DesiredHelpType = "advice" | "peer" | "mentor" | "feedback";
+export type AskUrgency = "now" | "soon" | "this_week" | "exploring";
+export type AskVisibility = "private" | "community" | "public";
+export type BridgeType = "mentor" | "peer" | "adjacent_perspective";
+export type BridgeStatus = "suggested" | "asked" | "responded" | "dismissed";
+export type HelpSignalKind =
+  | "useful"
+  | "clarifying"
+  | "motivating"
+  | "practical"
+  | "not_relevant";
+export type Availability = "async" | "live_now" | "bookable_10m";
 
-// Social — suggestions with Bridges (why you connect)
-export interface Suggestion {
-  user: User;
-  shared_tags: number;
-  common_tags: Tag[];
-  bridge: string; // human-readable explanation of why you connect
-  affinity_score?: number;
-  suggestion_type?: SuggestionType;
-  path_count?: number;
+export interface Ask {
+  id: string;
+  user_id: string;
+  user?: User;
+  question: string;
+  triage_summary: string;
+  topic: string;
+  urgency: AskUrgency;
+  desired_help_type: DesiredHelpType;
+  visibility: AskVisibility;
+  created_at: string;
+  updated_at: string;
 }
 
-// Discover — aggregated endpoint
-export interface DiscoverResponse {
-  suggestions: Suggestion[];
-  closest_twins?: Suggestion[];
-  adjacent_taste?: Suggestion[];
-  serendipity?: Suggestion[];
-  rooms: Room[];
-  paths: Path[];
+export interface AskCreateInput {
+  question: string;
+  topic?: string;
+  urgency?: AskUrgency;
+  desired_help_type?: DesiredHelpType;
+  visibility?: AskVisibility;
+}
+
+export interface Bridge {
+  id: string;
+  ask_id: string;
+  requester_id: string;
+  recommended_user_id: string;
+  recommended_user: User;
+  reason: string;
+  bridge_type: BridgeType;
+  confidence: number;
+  status: BridgeStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AskCreateResponse {
+  ask: Ask;
+  bridges: Bridge[];
+}
+
+export interface HelpSignal {
+  id: string;
+  bridge_id: string;
+  user_id: string;
+  kind: HelpSignalKind;
+  created_at: string;
+}
+
+export interface TrustProfile {
+  user_id: string;
+  user?: User;
+  topics: string;
+  lived_experience: string;
+  availability: Availability;
+  helped_count: number;
+  response_quality: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrustProfileInput {
+  topics: string;
+  lived_experience: string;
+  availability: Availability;
+}
+
+export interface HelpSession {
+  id: string;
+  title: string;
+  intent: string;
+  description: string;
+  member_count: number;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface TodayResponse {
+  latest_ask?: Ask;
+  bridges: Bridge[];
+  help_sessions: HelpSession[];
+  trust_profile?: TrustProfile;
+  starter_prompts: string[];
 }
 
 // Rooms — mood rooms for co-consumption

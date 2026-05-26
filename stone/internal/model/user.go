@@ -29,9 +29,10 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 type UserProfile struct {
 	User
-	FollowerCount  int  `json:"follower_count"`
-	FollowingCount int  `json:"following_count"`
-	ContentCount   int  `json:"content_count"`
-	IsFollowing    bool `json:"is_following,omitempty"`
-	IsBlocked      bool `json:"is_blocked,omitempty"`
+	FollowerCount  int           `json:"follower_count"`
+	FollowingCount int           `json:"following_count"`
+	ContentCount   int           `json:"content_count"`
+	IsFollowing    bool          `json:"is_following,omitempty"`
+	IsBlocked      bool          `json:"is_blocked,omitempty"`
+	TrustProfile   *TrustProfile `json:"trust_profile,omitempty"`
 }

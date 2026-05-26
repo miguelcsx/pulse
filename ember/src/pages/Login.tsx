@@ -8,7 +8,7 @@ export default function Login() {
           Pulse
         </h1>
         <p className="text-center text-sm text-[var(--color-text-muted)] mb-8">
-          Connect through moments
+          The human layer after AI
         </p>
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8">
           <LoginForm />

@@ -69,10 +69,10 @@ export default function Rooms() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Mood Rooms</h2>
+      <h2 className="text-lg font-semibold">Live help rooms</h2>
       {rooms.length === 0 ? (
         <p className="text-[var(--color-text-muted)] text-sm">
-          No active rooms right now. Post with tags to create rooms.
+          No active rooms right now. Ask for perspective from Today to start a context.
         </p>
       ) : (
         rooms.map((room) => (

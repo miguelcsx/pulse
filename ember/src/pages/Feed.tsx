@@ -2,14 +2,13 @@ import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { getFeed } from "../api/content";
 import FeedCard from "../components/feed/FeedCard";
 import ContentModal from "../components/feed/ContentModal";
-import InlineSuggestionGroup from "../components/feed/InlineSuggestionGroup";
 import Spinner from "../components/ui/Spinner";
 import TrendingTags from "../components/content/TrendingTags";
 import { useUiStore } from "../store/uiStore";
 import { useFeedContextStore } from "../store/feedContextStore";
 import { useVisibleRoomContext } from "../hooks/useVisibleRoomContext";
 import { usePageTitle } from "../hooks/usePageTitle";
-import type { FeedItem, Suggestion } from "@pulse/drift/types";
+import type { FeedItem } from "@pulse/drift/types";
 
 export default function Feed() {
   usePageTitle("Feed");
@@ -19,7 +18,6 @@ export default function Feed() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<FeedItem | null>(null);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
@@ -36,9 +34,6 @@ export default function Feed() {
           setItems((prev) => [...prev, ...res.items]);
         } else {
           setItems(res.items);
-          if (res.suggestions?.length) {
-            setSuggestions(res.suggestions);
-          }
         }
         setCursor(res.next_cursor);
         setHasMore(res.has_more);
@@ -132,7 +127,7 @@ export default function Feed() {
         </div>
       ) : (
         <>
-          {items.map((item, index) => (
+          {items.map((item) => (
             <Fragment key={item.id}>
               <div ref={observe} data-content-id={item.id}>
                 <FeedCard
@@ -140,9 +135,6 @@ export default function Feed() {
                   onClick={() => setSelected(item)}
                 />
               </div>
-              {index === 4 && suggestions.length > 0 && (
-                <InlineSuggestionGroup suggestions={suggestions} />
-              )}
             </Fragment>
           ))}
           <div ref={sentinelRef} className="h-8" />

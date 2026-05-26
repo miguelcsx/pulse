@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getMe, logout as logoutAPI, updateMe } from "../api/auth";
+import { getToday, updateTrustProfile } from "../api/advice";
 import { useAuthStore } from "../store/authStore";
 import { useUiStore } from "../store/uiStore";
 import { usePageTitle } from "../hooks/usePageTitle";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
-import type { User } from "@pulse/drift/types";
+import type { Availability, User } from "@pulse/drift/types";
 
 export default function Settings() {
   usePageTitle("Settings");
@@ -18,7 +19,11 @@ export default function Settings() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
+  const [topics, setTopics] = useState("");
+  const [livedExperience, setLivedExperience] = useState("");
+  const [availability, setAvailability] = useState<Availability>("async");
   const [saving, setSaving] = useState(false);
+  const [savingTrust, setSavingTrust] = useState(false);
 
   useEffect(() => {
     getMe().then((u) => {
@@ -26,6 +31,13 @@ export default function Settings() {
       setDisplayName(u.display_name);
       setBio(u.bio);
       setLocation(u.location);
+    });
+    getToday().then((today) => {
+      if (today.trust_profile) {
+        setTopics(today.trust_profile.topics);
+        setLivedExperience(today.trust_profile.lived_experience);
+        setAvailability(today.trust_profile.availability);
+      }
     });
   }, []);
 
@@ -45,6 +57,23 @@ export default function Settings() {
       addToast("Failed to update", "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTrustSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTrust(true);
+    try {
+      await updateTrustProfile({
+        topics,
+        lived_experience: livedExperience,
+        availability,
+      });
+      addToast("Trust profile updated", "success");
+    } catch {
+      addToast("Failed to update trust profile", "error");
+    } finally {
+      setSavingTrust(false);
     }
   };
 
@@ -79,8 +108,11 @@ export default function Settings() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
           <div>
-            <label className="block text-sm font-medium mb-1">Bio</label>
+            <label htmlFor="profile-bio" className="block text-sm font-medium mb-1">
+              Bio
+            </label>
             <textarea
+              id="profile-bio"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
@@ -97,6 +129,61 @@ export default function Settings() {
           </Button>
         </form>
       )}
+
+      <hr className="border-[var(--color-border)]" />
+
+      <form onSubmit={handleTrustSave} className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Trust profile</h3>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            Tell Pulse where you can help as a mentor or peer.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="trust-topics" className="block text-sm font-medium mb-1">
+            Topics
+          </label>
+          <textarea
+            id="trust-topics"
+            value={topics}
+            onChange={(e) => setTopics(e.target.value)}
+            rows={3}
+            placeholder="first customers, creative direction, portfolio review"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)]"
+          />
+        </div>
+        <div>
+          <label htmlFor="trust-lived-experience" className="block text-sm font-medium mb-1">
+            Lived experience
+          </label>
+          <textarea
+            id="trust-lived-experience"
+            value={livedExperience}
+            onChange={(e) => setLivedExperience(e.target.value)}
+            rows={5}
+            placeholder="What have you lived through that could help someone else?"
+            className="w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)]"
+          />
+        </div>
+        <div>
+          <label htmlFor="trust-availability" className="block text-sm font-medium mb-1">
+            Availability
+          </label>
+          <select
+            id="trust-availability"
+            value={availability}
+            onChange={(e) => setAvailability(e.target.value as Availability)}
+            className="w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)]"
+          >
+            <option value="async">Async</option>
+            <option value="live_now">Live now</option>
+            <option value="bookable_10m">Bookable 10m</option>
+          </select>
+        </div>
+        <Button type="submit" loading={savingTrust}>
+          Save Trust Profile
+        </Button>
+      </form>
 
       <hr className="border-[var(--color-border)]" />
 

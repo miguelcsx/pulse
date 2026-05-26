@@ -18,7 +18,7 @@ type OllamaEmbedder struct {
 	client  *http.Client
 }
 
-func NewOllamaEmbedder(baseURL, model string, dim int) *OllamaEmbedder {
+func NewOllamaEmbedder(baseURL, model string, dim int, timeout time.Duration) *OllamaEmbedder {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -28,12 +28,15 @@ func NewOllamaEmbedder(baseURL, model string, dim int) *OllamaEmbedder {
 	if dim <= 0 {
 		dim = 1024 // default for qwen3-embedding
 	}
+	if timeout <= 0 {
+		timeout = 2 * time.Second
+	}
 	return &OllamaEmbedder{
 		baseURL: baseURL,
 		model:   model,
 		dim:     dim,
 		client: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout: timeout,
 		},
 	}
 }

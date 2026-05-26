@@ -11,8 +11,12 @@ build/
 *.dylib
 
 # Go
+stone/bin/
 stone/tmp/
 stone/uploads/
+!stone/uploads/
+!stone/uploads/demo/
+!stone/uploads/demo/*
 
 # Environment
 .env
@@ -43,3 +47,4 @@ coverage/
 # Temp
 tmp/
 .tmp/
+.data/

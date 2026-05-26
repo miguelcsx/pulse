@@ -6,7 +6,7 @@ import ContextSheet from "../feed/ContextSheet";
 
 export default function AppShell() {
   const location = useLocation();
-  const isFeedRoute = location.pathname === "/";
+  const isFeedRoute = location.pathname === "/moments";
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">

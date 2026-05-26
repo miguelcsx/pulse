@@ -11,6 +11,7 @@ import Spinner from "./components/ui/Spinner";
 
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const Today = lazy(() => import("./pages/Today"));
 const Feed = lazy(() => import("./pages/Feed"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Discover = lazy(() => import("./pages/Discover"));
@@ -113,7 +114,8 @@ export default function App() {
         />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route path="/" element={<Feed />} />
+            <Route path="/" element={<Today />} />
+            <Route path="/moments" element={<Feed />} />
             <Route path="/upload" element={<Upload />} />
             <Route path="/discover" element={<Discover />} />
             <Route path="/profile/me" element={<ProfileRedirect />} />
@@ -121,10 +123,6 @@ export default function App() {
             <Route path="/paths/:id" element={<PathView />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
-            {/* Legacy routes redirect to discover */}
-            <Route path="/suggestions" element={<Navigate to="/discover" replace />} />
-            <Route path="/rooms" element={<Navigate to="/discover" replace />} />
-            <Route path="/paths" element={<Navigate to="/discover" replace />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

@@ -18,37 +18,36 @@ import (
 type Server struct {
 	cfg      *config.Config
 	db       *gorm.DB
-	graph    *store.GraphStore
 	redis    *redis.Client
 	storage  store.Storage
 	router   *gin.Engine
 	hub      *ws.Hub
 	embedder service.Embedder
 
-	authService     *service.AuthService
-	userService     *service.UserService
-	contentService  *service.ContentService
-	tagService      *service.TagService
-	feedService     *service.FeedService
-	affinityService *service.AffinityService
-	followService   *service.FollowService
-	roomService     *service.RoomService
-	pathService     *service.PathService
-	eventService    *service.EventService
-	mediaService    *service.MediaService
+	authService    *service.AuthService
+	userService    *service.UserService
+	contentService *service.ContentService
+	tagService     *service.TagService
+	feedService    *service.FeedService
+	followService  *service.FollowService
+	roomService    *service.RoomService
+	pathService    *service.PathService
+	eventService   *service.EventService
+	mediaService   *service.MediaService
+	adviceService  *service.AdviceService
 }
 
-func NewServer(cfg *config.Config, db *gorm.DB, graph *store.GraphStore, rdb *redis.Client, storage store.Storage) *Server {
+func NewServer(cfg *config.Config, db *gorm.DB, rdb *redis.Client, storage store.Storage) *Server {
 	hub := ws.NewHub()
 	go hub.Run()
 
-	tagSvc := service.NewTagService(db, graph, rdb, cfg.TagCacheTTL)
+	tagSvc := service.NewTagService(db, rdb, cfg.TagCacheTTL)
 	mediaSvc := service.NewMediaService(db, storage)
 	roomSvc := service.NewRoomService(db, cfg)
 
 	var embedder service.Embedder
 	if cfg.OllamaBaseURL != "" && cfg.OllamaModel != "" {
-		embedder = service.NewOllamaEmbedder(cfg.OllamaBaseURL, cfg.OllamaModel, cfg.EmbeddingDimensions)
+		embedder = service.NewOllamaEmbedder(cfg.OllamaBaseURL, cfg.OllamaModel, cfg.EmbeddingDimensions, cfg.OllamaTimeout)
 	} else {
 		embedder = service.NewHashEmbedder(cfg.EmbeddingDimensions)
 	}
@@ -56,23 +55,22 @@ func NewServer(cfg *config.Config, db *gorm.DB, graph *store.GraphStore, rdb *re
 	s := &Server{
 		cfg:      cfg,
 		db:       db,
-		graph:    graph,
 		redis:    rdb,
 		storage:  storage,
 		hub:      hub,
 		embedder: embedder,
 
-		authService:     service.NewAuthService(db, graph, rdb, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.LoginMaxAttempts, cfg.LoginLockoutDuration),
-		userService:     service.NewUserService(db),
-		tagService:      tagSvc,
-		contentService:  service.NewContentService(db, graph, storage, tagSvc, mediaSvc, roomSvc, embedder),
-		feedService:     service.NewFeedService(db, roomSvc, cfg),
-		affinityService: service.NewAffinityService(graph, cfg),
-		followService:   service.NewFollowService(db, graph),
-		roomService:     roomSvc,
-		pathService:     service.NewPathService(db, graph),
-		eventService:    service.NewEventService(db, cfg),
-		mediaService:    mediaSvc,
+		authService:    service.NewAuthService(db, rdb, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.LoginMaxAttempts, cfg.LoginLockoutDuration),
+		userService:    service.NewUserService(db),
+		tagService:     tagSvc,
+		contentService: service.NewContentService(db, storage, tagSvc, mediaSvc, roomSvc),
+		feedService:    service.NewFeedService(db, roomSvc, cfg),
+		followService:  service.NewFollowService(db),
+		roomService:    roomSvc,
+		pathService:    service.NewPathService(db),
+		eventService:   service.NewEventService(db, cfg),
+		mediaService:   mediaSvc,
+		adviceService:  service.NewAdviceService(db, embedder),
 	}
 
 	if cfg.IsProduction() {
@@ -183,9 +181,19 @@ func (s *Server) setupRoutes() {
 
 			// Feed
 			protected.GET("/feed", s.GetFeed)
+			protected.GET("/today", s.GetToday)
+
+			// Human advice network
+			protected.POST("/asks", s.CreateAsk)
+			protected.GET("/asks/:id/bridges", s.GetAskBridges)
+			protected.POST("/bridges/:id/ask", s.AskBridge)
+			protected.POST("/bridges/:id/respond", s.RespondBridge)
+			protected.POST("/bridges/:id/signal", s.SignalBridge)
+			protected.GET("/help-sessions", s.ListHelpSessions)
+			protected.POST("/help-sessions/:id/join", s.JoinHelpSession)
+			protected.PUT("/me/trust-profile", s.UpdateTrustProfile)
 
 			// Social
-			protected.GET("/suggestions", s.GetSuggestions)
 			protected.POST("/follow/:id", s.FollowUser)
 			protected.DELETE("/follow/:id", s.UnfollowUser)
 			protected.POST("/block/:id", s.BlockUser)
@@ -202,9 +210,6 @@ func (s *Server) setupRoutes() {
 			protected.GET("/paths/:id", s.GetPath)
 			protected.POST("/paths/:id/follow", s.FollowPath)
 			protected.DELETE("/paths/:id/follow", s.UnfollowPath)
-
-			// Discover (aggregated suggestions + rooms + paths)
-			protected.GET("/discover", s.GetDiscover)
 
 			// Events
 			protected.POST("/events", s.RecordEvents)

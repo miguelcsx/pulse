@@ -75,6 +75,11 @@ func (s *UserService) GetProfile(id uuid.UUID, viewerID uuid.UUID) (*model.UserP
 		IsBlocked:      row.IsBlocked,
 	}
 
+	var trust model.TrustProfile
+	if err := s.db.First(&trust, "user_id = ?", id).Error; err == nil {
+		profile.TrustProfile = &trust
+	}
+
 	return profile, nil
 }
 

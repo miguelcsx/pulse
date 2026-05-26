@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"time"
 
@@ -18,13 +17,11 @@ import (
 
 	"github.com/pulse/stone/internal/model"
 	"github.com/pulse/stone/internal/security"
-	"github.com/pulse/stone/internal/store"
 )
 
 // AuthService handles user registration, login, and JWT token management.
 type AuthService struct {
 	db              *gorm.DB
-	graph           *store.GraphStore
 	rdb             *redis.Client
 	jwtSecret       string
 	accessTTL       time.Duration
@@ -40,8 +37,10 @@ var (
 	ErrDuplicateUser       = errors.New("handle or email already taken")
 )
 
+const refreshReplayGrace = 15 * time.Second
+
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *gorm.DB, graph *store.GraphStore, rdb *redis.Client, jwtSecret string, accessTTL, refreshTTL time.Duration, maxAttempts int, lockoutDuration time.Duration) *AuthService {
+func NewAuthService(db *gorm.DB, rdb *redis.Client, jwtSecret string, accessTTL, refreshTTL time.Duration, maxAttempts int, lockoutDuration time.Duration) *AuthService {
 	if maxAttempts <= 0 {
 		maxAttempts = 10
 	}
@@ -50,7 +49,6 @@ func NewAuthService(db *gorm.DB, graph *store.GraphStore, rdb *redis.Client, jwt
 	}
 	return &AuthService{
 		db:              db,
-		graph:           graph,
 		rdb:             rdb,
 		jwtSecret:       jwtSecret,
 		accessTTL:       accessTTL,
@@ -80,10 +78,6 @@ func (s *AuthService) Register(handle, email, password, displayName string) (*mo
 			return nil, "", "", ErrDuplicateUser
 		}
 		return nil, "", "", fmt.Errorf("failed to create user: %w", err)
-	}
-
-	if err := s.syncUserToGraph(user); err != nil {
-		slog.Warn("failed to sync new user to graph", "user_id", user.ID, "error", err)
 	}
 
 	accessToken, refreshToken, err := s.generateTokens(user.ID)
@@ -130,34 +124,6 @@ func (s *AuthService) Login(email, password string) (*model.User, string, string
 	return &user, accessToken, refreshToken, nil
 }
 
-func (s *AuthService) syncUserToGraph(user *model.User) error {
-	if s.graph == nil || user == nil {
-		return nil
-	}
-
-	return s.graph.RunWrite(context.Background(), `
-		MERGE (u:User {id: $id})
-		SET u.handle = $handle,
-		    u.email = $email,
-		    u.displayName = $displayName,
-		    u.avatarUrl = $avatarUrl,
-		    u.bio = $bio,
-		    u.location = $location,
-		    u.createdAt = $createdAt,
-		    u.updatedAt = $updatedAt
-	`, map[string]any{
-		"id":          user.ID.String(),
-		"handle":      user.Handle,
-		"email":       user.Email,
-		"displayName": user.DisplayName,
-		"avatarUrl":   user.AvatarURL,
-		"bio":         user.Bio,
-		"location":    user.Location,
-		"createdAt":   user.CreatedAt.UTC(),
-		"updatedAt":   user.UpdatedAt.UTC(),
-	})
-}
-
 // RefreshToken validates a refresh token and issues a new access/refresh token pair.
 func (s *AuthService) RefreshToken(refreshToken string) (string, string, error) {
 	parsed, err := security.ParseAndValidateJWT(refreshToken, s.jwtSecret, "refresh")
@@ -180,7 +146,13 @@ func (s *AuthService) RefreshToken(refreshToken string) (string, string, error) 
 			return fmt.Errorf("failed to load refresh session: %w", err)
 		}
 
-		if session.RevokedAt != nil || session.ExpiresAt.Before(time.Now()) {
+		now := time.Now()
+		activeSession, err := resolveRefreshReplay(tx, session, parsed.UserID, now)
+		if err != nil {
+			return err
+		}
+
+		if activeSession.ExpiresAt.Before(now) {
 			return ErrInvalidRefreshToken
 		}
 
@@ -189,9 +161,8 @@ func (s *AuthService) RefreshToken(refreshToken string) (string, string, error) 
 			return err
 		}
 
-		now := time.Now()
-		if err := tx.Model(&session).
-			Where("id = ? AND revoked_at IS NULL", session.ID).
+		if err := tx.Model(&activeSession).
+			Where("id = ? AND revoked_at IS NULL", activeSession.ID).
 			Updates(map[string]any{
 				"revoked_at":  now,
 				"replaced_by": replacementID,
@@ -211,6 +182,29 @@ func (s *AuthService) RefreshToken(refreshToken string) (string, string, error) 
 		return "", "", err
 	}
 	return accessToken, newRefreshToken, nil
+}
+
+func resolveRefreshReplay(tx *gorm.DB, session model.RefreshToken, userID uuid.UUID, now time.Time) (model.RefreshToken, error) {
+	for range 3 {
+		if session.RevokedAt == nil {
+			return session, nil
+		}
+		if session.ReplacedBy == nil || now.Sub(*session.RevokedAt) > refreshReplayGrace {
+			return model.RefreshToken{}, ErrInvalidRefreshToken
+		}
+
+		var replacement model.RefreshToken
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			First(&replacement, "id = ? AND user_id = ?", *session.ReplacedBy, userID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return model.RefreshToken{}, ErrInvalidRefreshToken
+			}
+			return model.RefreshToken{}, fmt.Errorf("failed to load replacement refresh session: %w", err)
+		}
+		session = replacement
+	}
+
+	return model.RefreshToken{}, ErrInvalidRefreshToken
 }
 
 // RevokeRefreshToken invalidates a refresh token session if it exists and is active.

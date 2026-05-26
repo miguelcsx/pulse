@@ -202,25 +202,56 @@ export default function Profile() {
         <div className="flex gap-6 mt-4 text-sm">
           <div>
             <span className="font-medium">{profile.content_count}</span>
-            <span className="text-[var(--color-text-muted)] ml-1">posts</span>
+            <span className="text-[var(--color-text-muted)] ml-1">moments</span>
           </div>
           <div>
-            <span className="font-medium">{profile.follower_count}</span>
-            <span className="text-[var(--color-text-muted)] ml-1">
-              followers
+            <span className="font-medium">
+              {profile.trust_profile?.helped_count ?? 0}
             </span>
+            <span className="text-[var(--color-text-muted)] ml-1">helped</span>
           </div>
           <div>
-            <span className="font-medium">{profile.following_count}</span>
+            <span className="font-medium">
+              {(profile.trust_profile?.response_quality ?? 0).toFixed(1)}
+            </span>
             <span className="text-[var(--color-text-muted)] ml-1">
-              following
+              quality
             </span>
           </div>
         </div>
       </div>
 
+      <section className="rounded-lg border border-[var(--color-border)] p-5">
+        <h3 className="text-sm font-semibold">Trust profile</h3>
+        {profile.trust_profile ? (
+          <div className="mt-3 space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
+                Topics
+              </p>
+              <p className="mt-1 text-sm">{profile.trust_profile.topics || "No topics yet."}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
+                Lived experience
+              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
+                {profile.trust_profile.lived_experience || "No proof moments yet."}
+              </p>
+            </div>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Availability: {profile.trust_profile.availability.replace("_", " ")}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--color-text-muted)]">
+            This person has not added mentor/peer context yet.
+          </p>
+        )}
+      </section>
+
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold">Recent posts</h3>
+        <h3 className="text-sm font-semibold">Proof moments</h3>
         {content.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)]">
             No content yet.

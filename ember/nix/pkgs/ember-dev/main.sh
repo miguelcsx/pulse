@@ -13,4 +13,4 @@ fi
 
 echo "[INFO] Starting ember Vite dev server on :5173"
 echo "[INFO] Backend proxy → ${VITE_DEV_BACKEND_ORIGIN}"
-npm run dev "$@" --host
+npm run dev -- --host 127.0.0.1 "$@"

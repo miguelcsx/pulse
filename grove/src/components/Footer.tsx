@@ -6,10 +6,10 @@ export default function Footer() {
           <span className="bg-gradient-to-r from-[var(--color-primary)] to-pink-500 bg-clip-text text-transparent font-semibold">
             Pulse
           </span>
-          {" "}&mdash; Connect through moments
+          {" "}&mdash; the human layer after AI
         </span>
         <span className="text-xs text-[var(--color-text-muted)]">
-          &copy; {new Date().getFullYear()} Pulse. Built for social discovery.
+          &copy; {new Date().getFullYear()} Pulse. Built for human advice.
         </span>
       </div>
     </footer>

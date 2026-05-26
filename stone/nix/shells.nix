@@ -2,7 +2,6 @@
   default = pkgs.mkShell {
     packages = pkgs.lib.flatten [
       lib'.envs.stone.dependencies
-      lib'.envs.stone.envars
 
       (pkgs.lib.attrValues inputs'.roots.packages)
       (pkgs.lib.attrValues self'.packages)
@@ -27,8 +26,6 @@
       echo "    roots-services stop    Stop all services"
       echo "    roots-services status  Show service status"
       echo ""
-
-      source stone-envars dev
     '';
   };
 }

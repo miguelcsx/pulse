@@ -10,4 +10,4 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "[INFO] Starting grove Vite dev server on :5174"
-npm run dev "$@"
+npm run dev -- --host 127.0.0.1 "$@"

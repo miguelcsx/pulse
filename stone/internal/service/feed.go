@@ -68,11 +68,9 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 	if cursor != "" {
 		parsed, err := decodeScoredCursor(cursor)
 		if err != nil {
-			// Legacy cursor format (time|uuid) — treat as first page
-			page = 0
-		} else {
-			page = parsed
+			return nil, "", false, err
 		}
+		page = parsed
 	}
 
 	now := time.Now()
@@ -403,8 +401,7 @@ func decodeScoredCursor(cursor string) (int, error) {
 		}
 		return page, nil
 	}
-	// Legacy format (time|uuid) — not a scored cursor
-	return 0, fmt.Errorf("legacy cursor format")
+	return 0, fmt.Errorf("malformed scored cursor")
 }
 
 // ---------------------------------------------------------------------------

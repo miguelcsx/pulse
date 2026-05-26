@@ -14,8 +14,6 @@
       echo "    roots-db-create     Create pulse_dev database"
       echo "    roots-redis-start   Start Redis"
       echo "    roots-redis-stop    Stop Redis"
-      echo "    roots-neo4j-start   Start Neo4j"
-      echo "    roots-neo4j-stop    Stop Neo4j"
       echo "    roots-services      Start/stop all services"
       echo ""
     '';

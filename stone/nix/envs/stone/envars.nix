@@ -12,9 +12,6 @@ in pkgs.writeShellApplication {
     main() {
       local secrets=(
         DATABASE_URL
-        NEO4J_URI
-        NEO4J_USER
-        NEO4J_PASSWORD
         REDIS_URL
         JWT_SECRET
         ENV

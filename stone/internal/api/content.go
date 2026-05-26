@@ -37,10 +37,8 @@ func (s *Server) CreateContent(c *gin.Context) {
 		}
 	}
 
-	// For text posts, no file needed.
-	// For media posts, clients can either:
-	// 1) upload via /content multipart file directly (legacy path), or
-	// 2) provide media_asset_id from the async media pipeline.
+	// For text posts, no file needed. Media posts use either direct multipart
+	// upload or a ready media_asset_id from the async media pipeline.
 	var filename string
 	file, header, err := c.Request.FormFile("file")
 	if err == nil {

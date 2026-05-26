@@ -390,6 +390,60 @@
     { "follower_handle": "ravi.lens", "followee_handle": "kai" },
     { "follower_handle": "ama.sky", "followee_handle": "ravi.lens" }
   ],
+  "trust_profiles": [
+    {
+      "user_handle": "kai",
+      "topics": "first customers, launch feedback, street-level research",
+      "lived_experience": "Built a paid workshop community from zero by doing direct outreach and weekly customer interviews.",
+      "availability": "bookable_10m",
+      "helped_count": 14,
+      "response_quality": 4.6
+    },
+    {
+      "user_handle": "ravi.lens",
+      "topics": "portfolio review, founder storytelling, customer discovery",
+      "lived_experience": "Helped early creative founders turn rough narratives into clear portfolios and sales conversations.",
+      "availability": "async",
+      "helped_count": 22,
+      "response_quality": 4.8
+    },
+    {
+      "user_handle": "marcelo.wav",
+      "topics": "lonely builders, creative consistency, launch accountability",
+      "lived_experience": "Shipped a weekly creative project for a year while working alone and building a small audience.",
+      "availability": "live_now",
+      "helped_count": 9,
+      "response_quality": 4.3
+    },
+    {
+      "user_handle": "solene",
+      "topics": "design critique, positioning, visual systems",
+      "lived_experience": "Runs fast critique sessions for creatives who need sharper positioning before publishing work.",
+      "availability": "bookable_10m",
+      "helped_count": 17,
+      "response_quality": 4.5
+    }
+  ],
+  "asks": [
+    {
+      "user_handle": "lunanova",
+      "question": "I am launching my first creative SaaS and need help finding the first 10 users without sounding spammy.",
+      "topic": "first customers",
+      "urgency": "this_week",
+      "desired_help_type": "mentor",
+      "visibility": "community",
+      "hours_ago": 1
+    },
+    {
+      "user_handle": "iris.analog",
+      "question": "I need a peer who can review my portfolio and tell me what feels confusing before I send it to clients.",
+      "topic": "portfolio review",
+      "urgency": "soon",
+      "desired_help_type": "feedback",
+      "visibility": "community",
+      "hours_ago": 4
+    }
+  ],
   "rooms": [
     {
       "cluster_key": "night-city-vibes-2024-01-15",
@@ -408,6 +462,29 @@
       "tag_names": ["architecture", "brutalism", "minimal"],
       "member_handles": ["solene", "noor"],
       "expires_in_hours": 22
+    }
+  ],
+  "help_sessions": [
+    {
+      "title": "First 10 customers",
+      "intent": "go_to_market",
+      "description": "Fast feedback for builders trying to get early users.",
+      "member_handles": ["kai", "ravi.lens", "lunanova"],
+      "expires_in_hours": 8
+    },
+    {
+      "title": "Portfolio review",
+      "intent": "creative_feedback",
+      "description": "Low-pressure critique from peers and mentors.",
+      "member_handles": ["solene", "iris.analog"],
+      "expires_in_hours": 8
+    },
+    {
+      "title": "Lonely builders late night",
+      "intent": "accountability",
+      "description": "Find someone shipping through the same messy middle.",
+      "member_handles": ["marcelo.wav", "pixel.witch"],
+      "expires_in_hours": 8
     }
   ],
   "paths": [

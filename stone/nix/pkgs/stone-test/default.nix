@@ -1,9 +1,6 @@
 { lib', pkgs }:
 pkgs.writeShellApplication {
   name = "stone-test";
-  runtimeInputs = pkgs.lib.flatten [
-    lib'.envs.stone.dependencies
-    lib'.envs.stone.envars
-  ];
+  runtimeInputs = lib'.envs.stone.dependencies;
   text = builtins.readFile ./main.sh;
 }

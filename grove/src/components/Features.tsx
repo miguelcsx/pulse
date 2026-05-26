@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 
 const features = [
   {
-    title: "Affinity-Based Suggestions",
+    title: "Ask, then bridge",
     description:
-      "Get matched with people based on shared tags and activity context. No follower-count ranking, no popularity contests.",
+      "Pulse turns a question into mentor, peer, and adjacent-perspective bridges with a clear reason for each match.",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-1.997m0 0A8.96 8.96 0 0112 15a8.96 8.96 0 01-1.788.179M9.75 9a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0z" />
@@ -14,9 +14,9 @@ const features = [
     accentBg: "bg-indigo-500/20",
   },
   {
-    title: "Mood Rooms",
+    title: "Live help rooms",
     description:
-      "Temporary spaces that form around shared tags. Enter a room, see who's browsing the same vibes, discover new perspectives in real-time.",
+      "Temporary rooms form around intent: first customers, portfolio review, accountability, and the messy middle of building.",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
@@ -26,9 +26,9 @@ const features = [
     accentBg: "bg-cyan-500/20",
   },
   {
-    title: "Curated Paths",
+    title: "Trust profiles",
     description:
-      "Build and follow content journeys across images, videos, and text. Share your perspective through narrative paths.",
+      "Profiles show lived experience, topics, availability, proof moments, and response quality instead of vanity metrics.",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
@@ -64,7 +64,7 @@ export default function Features() {
     <section ref={sectionRef} id="features" className="py-20 px-6">
       <div className="max-w-5xl mx-auto">
         <h2 className="text-3xl font-bold text-center mb-12">
-          Social Discovery, Connected Differently
+          The Human Layer After AI
         </h2>
         <div className="grid md:grid-cols-3 gap-8">
           {features.map((feature, i) => (
