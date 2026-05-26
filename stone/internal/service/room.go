@@ -1,19 +1,23 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/store"
 )
 
 // RoomService handles mood room lifecycle.
@@ -197,4 +201,279 @@ func BuildClusterKey(tagIDs []uuid.UUID) string {
 	h.Write([]byte(dateBucket))
 
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// GetRoomContent returns a mixed set of content: affinity-first with
+// exploration injected to avoid a closed loop.
+func (s *RoomService) GetRoomContent(ctx context.Context, graph *store.GraphStore, embedder Embedder, roomID uuid.UUID, userID uuid.UUID, limit int) ([]model.Content, error) {
+	if graph == nil {
+		return nil, errors.New("graph store not configured")
+	}
+	if embedder == nil {
+		return nil, errors.New("embedder not configured")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	var room model.Room
+	if err := s.db.Preload("Tags").
+		Where("id = ? AND expires_at > ?", roomID, time.Now()).
+		First(&room).Error; err != nil {
+		return nil, ErrRoomNotFoundOrExpired
+	}
+
+	if len(room.Tags) == 0 {
+		return []model.Content{}, nil
+	}
+
+	tagIDs := make([]string, 0, len(room.Tags))
+	for _, t := range room.Tags {
+		tagIDs = append(tagIDs, t.ID.String())
+	}
+
+	userEmbedding, err := s.userEmbedding(ctx, graph, userID, embedder.Dimensions())
+	if err != nil {
+		return nil, err
+	}
+
+	explorationRatio := 0.2
+	if s.cfg != nil && s.cfg.RoomExplorationRatio > 0 {
+		explorationRatio = s.cfg.RoomExplorationRatio
+	}
+	exploreCount := int(math.Ceil(float64(limit) * explorationRatio))
+	if exploreCount < 1 {
+		exploreCount = 1
+	}
+	if exploreCount >= limit {
+		exploreCount = limit - 1
+	}
+	affinityCount := limit - exploreCount
+
+	affinityItems, err := s.queryRoomAffinity(ctx, graph, tagIDs, userEmbedding, affinityCount)
+	if err != nil {
+		return nil, err
+	}
+	exploreItems, err := s.queryRoomExploration(ctx, graph, tagIDs, exploreCount)
+	if err != nil {
+		return nil, err
+	}
+
+	orderedIDs := make([]uuid.UUID, 0, len(affinityItems)+len(exploreItems))
+	seen := make(map[uuid.UUID]struct{}, len(affinityItems)+len(exploreItems))
+	for _, item := range append(affinityItems, exploreItems...) {
+		if _, ok := seen[item.ID]; ok {
+			continue
+		}
+		seen[item.ID] = struct{}{}
+		orderedIDs = append(orderedIDs, item.ID)
+	}
+
+	return s.hydrateRoomContents(orderedIDs)
+}
+
+func (s *RoomService) userEmbedding(ctx context.Context, graph *store.GraphStore, userID uuid.UUID, dim int) ([]float64, error) {
+	query := `
+		MATCH (u:User {id: $userID})-[:CREATED]->(c:Content)
+		WHERE c.embedding IS NOT NULL
+		RETURN c.embedding AS embedding
+		ORDER BY c.createdAt DESC
+		LIMIT 20
+	`
+
+	raw, err := graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]any{
+			"userID": userID.String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		embeddings := make([][]float64, 0)
+		for result.Next(ctx) {
+			value, _ := result.Record().Get("embedding")
+			vec := toFloatSlice(value, dim)
+			if len(vec) > 0 {
+				embeddings = append(embeddings, vec)
+			}
+		}
+		return embeddings, result.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	items := raw.([][]float64)
+	if len(items) == 0 {
+		return make([]float64, dim), nil
+	}
+
+	return averageVectors(items, dim), nil
+}
+
+func (s *RoomService) queryRoomAffinity(ctx context.Context, graph *store.GraphStore, tagIDs []string, embedding []float64, limit int) ([]model.Content, error) {
+	query := `
+		CALL db.index.vector.queryNodes('content_embedding', $k, $embedding)
+		YIELD node AS c, score
+		MATCH (c)-[:TAGGED]->(t:Tag)
+		WHERE t.id IN $tagIDs
+		RETURN c { .id, .contentType, .mediaUrl, .body, .createdAt, .updatedAt } AS content
+		ORDER BY score DESC
+		LIMIT $limit
+	`
+
+	raw, err := graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]any{
+			"k":         limit,
+			"embedding": embedding,
+			"tagIDs":    tagIDs,
+			"limit":     limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		contents := make([]model.Content, 0)
+		for result.Next(ctx) {
+			node, _ := result.Record().Get("content")
+			content, err := mapRoomContent(node)
+			if err != nil {
+				return nil, err
+			}
+			contents = append(contents, content)
+		}
+		return contents, result.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return raw.([]model.Content), nil
+}
+
+func (s *RoomService) queryRoomExploration(ctx context.Context, graph *store.GraphStore, tagIDs []string, limit int) ([]model.Content, error) {
+	query := `
+		MATCH (c:Content)-[:TAGGED]->(t:Tag)
+		WHERE NOT t.id IN $tagIDs
+		WITH c ORDER BY rand()
+		LIMIT $limit
+		RETURN c { .id, .contentType, .mediaUrl, .body, .createdAt, .updatedAt } AS content
+	`
+
+	raw, err := graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]any{
+			"tagIDs": tagIDs,
+			"limit":  limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		contents := make([]model.Content, 0)
+		for result.Next(ctx) {
+			node, _ := result.Record().Get("content")
+			content, err := mapRoomContent(node)
+			if err != nil {
+				return nil, err
+			}
+			contents = append(contents, content)
+		}
+		return contents, result.Err()
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return raw.([]model.Content), nil
+}
+
+func mapRoomContent(node any) (model.Content, error) {
+	props, ok := node.(map[string]any)
+	if !ok {
+		return model.Content{}, fmt.Errorf("invalid content payload")
+	}
+
+	idStr, _ := props["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return model.Content{}, fmt.Errorf("invalid content id: %w", err)
+	}
+
+	return model.Content{
+		ID:          id,
+		ContentType: toString(props["contentType"]),
+		MediaURL:    toString(props["mediaUrl"]),
+		Body:        toString(props["body"]),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}, nil
+}
+
+func (s *RoomService) hydrateRoomContents(ids []uuid.UUID) ([]model.Content, error) {
+	if len(ids) == 0 {
+		return []model.Content{}, nil
+	}
+
+	var contents []model.Content
+	if err := s.db.Preload("Creator").Preload("Tags").Where("id IN ?", ids).Find(&contents).Error; err != nil {
+		return nil, fmt.Errorf("failed to load room contents: %w", err)
+	}
+
+	contentByID := make(map[uuid.UUID]model.Content, len(contents))
+	for _, c := range contents {
+		contentByID[c.ID] = c
+	}
+
+	ordered := make([]model.Content, 0, len(ids))
+	for _, id := range ids {
+		if c, ok := contentByID[id]; ok {
+			ordered = append(ordered, c)
+		}
+	}
+
+	return ordered, nil
+}
+
+func toFloatSlice(value any, dim int) []float64 {
+	switch v := value.(type) {
+	case []float64:
+		return v
+	case []any:
+		out := make([]float64, 0, len(v))
+		for _, item := range v {
+			switch n := item.(type) {
+			case float64:
+				out = append(out, n)
+			case int:
+				out = append(out, float64(n))
+			case int64:
+				out = append(out, float64(n))
+			}
+		}
+		return out
+	default:
+		if dim > 0 {
+			return make([]float64, dim)
+		}
+		return nil
+	}
+}
+
+func averageVectors(items [][]float64, dim int) []float64 {
+	if dim <= 0 {
+		return nil
+	}
+	acc := make([]float64, dim)
+	for _, vec := range items {
+		for i := 0; i < dim && i < len(vec); i++ {
+			acc[i] += vec[i]
+		}
+	}
+	for i := range acc {
+		acc[i] = acc[i] / float64(len(items))
+	}
+	return acc
 }

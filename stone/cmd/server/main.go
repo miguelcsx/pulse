@@ -31,6 +31,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	graph, err := store.NewNeo4j(cfg)
+	if err != nil {
+		slog.Error("failed to connect to neo4j", "error", err)
+		os.Exit(1)
+	}
+
 	rdb, err := store.NewRedis(cfg)
 	if err != nil {
 		slog.Error("failed to connect to redis", "error", err)
@@ -43,7 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := api.NewServer(cfg, db, rdb, storage)
+	srv := api.NewServer(cfg, db, graph, rdb, storage)
 	mediaSvc := srv.MediaService()
 	pathSvc := srv.PathService()
 

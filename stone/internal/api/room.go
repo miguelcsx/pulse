@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,34 @@ func (s *Server) ListRooms(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, rooms)
+}
+
+func (s *Server) GetRoomContent(c *gin.Context) {
+	roomID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid room id"})
+		return
+	}
+
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 50 {
+			limit = parsed
+		}
+	}
+
+	userID := middleware.GetUserID(c)
+	contents, err := s.roomService.GetRoomContent(c.Request.Context(), s.graph, s.embedder, roomID, userID, limit)
+	if err != nil {
+		if errors.Is(err, service.ErrRoomNotFoundOrExpired) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "room not found or expired"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load room content"})
+		return
+	}
+
+	c.JSON(http.StatusOK, contents)
 }
 
 func (s *Server) EnterRoom(c *gin.Context) {

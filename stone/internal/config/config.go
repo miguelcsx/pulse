@@ -13,7 +13,13 @@ type Config struct {
 	Env  string `envconfig:"ENV" default:"development"`
 
 	DatabaseURL string `envconfig:"DATABASE_URL" required:"true"`
-	RedisURL    string `envconfig:"REDIS_URL" required:"true"`
+
+	Neo4jURI      string `envconfig:"NEO4J_URI" required:"true"`
+	Neo4jUser     string `envconfig:"NEO4J_USER" default:"neo4j"`
+	Neo4jPassword string `envconfig:"NEO4J_PASSWORD" required:"true"`
+	Neo4jDatabase string `envconfig:"NEO4J_DATABASE" default:"pulse"`
+
+	RedisURL string `envconfig:"REDIS_URL" required:"true"`
 
 	JWTSecret                 string        `envconfig:"JWT_SECRET" required:"true"`
 	JWTAccessTTL              time.Duration `envconfig:"JWT_ACCESS_TTL" default:"15m"`
@@ -34,6 +40,15 @@ type Config struct {
 	StorageBaseURL   string `envconfig:"STORAGE_BASE_URL" default:""`
 	UploadPublicPath string `envconfig:"UPLOAD_PUBLIC_PATH" default:"/uploads"`
 	StorageMaxSizeMB int    `envconfig:"STORAGE_MAX_SIZE_MB" default:"10"`
+	StorageDriver    string `envconfig:"STORAGE_DRIVER" default:"local"` // "local" or "s3"
+
+	// S3/Supabase Storage
+	S3Endpoint  string `envconfig:"S3_ENDPOINT" default:""`
+	S3Region    string `envconfig:"S3_REGION" default:"us-east-1"`
+	S3Bucket    string `envconfig:"S3_BUCKET" default:""`
+	S3AccessKey string `envconfig:"S3_ACCESS_KEY" default:""`
+	S3SecretKey string `envconfig:"S3_SECRET_KEY" default:""`
+	S3PublicURL string `envconfig:"S3_PUBLIC_URL" default:""`
 
 	CORSOrigins string `envconfig:"CORS_ORIGINS" default:""`
 	WSOrigins   string `envconfig:"WS_ORIGINS" default:""`
@@ -65,13 +80,22 @@ type Config struct {
 	TagCacheTTL time.Duration `envconfig:"TAG_CACHE_TTL" default:"5m"`
 
 	// Room
-	RoomTTL time.Duration `envconfig:"ROOM_TTL" default:"24h"`
+	RoomTTL              time.Duration `envconfig:"ROOM_TTL" default:"24h"`
+	RoomExplorationRatio float64       `envconfig:"ROOM_EXPLORATION_RATIO" default:"0.2"`
 
 	// WebSocket
 	WSMaxMessageSize int64 `envconfig:"WS_MAX_MESSAGE_SIZE" default:"4096"`
 
 	// Observability
 	MetricsEnabled bool `envconfig:"METRICS_ENABLED" default:"false"`
+
+	// Vector search
+	EmbeddingDimensions int `envconfig:"EMBEDDING_DIMENSIONS" default:"1024"`
+	VectorTopK          int `envconfig:"VECTOR_TOP_K" default:"12"`
+
+	// Local AI (Ollama for semantic embeddings)
+	OllamaBaseURL string `envconfig:"OLLAMA_BASE_URL" default:"http://localhost:11434"`
+	OllamaModel   string `envconfig:"OLLAMA_MODEL" default:"qwen3-embedding"`
 
 	// Affinity decay half-lives (in days)
 	AffinityHalfLife7DDays  float64 `envconfig:"AFFINITY_HALF_LIFE_7D_DAYS" default:"3.5"`
@@ -159,11 +183,46 @@ func (c *Config) validate() error {
 	if strings.TrimSpace(c.TrustedProxies) == "" && c.Env != "development" {
 		return fmt.Errorf("TRUSTED_PROXIES is required outside development")
 	}
-	if strings.TrimSpace(c.DatabaseURL) == "" || strings.TrimSpace(c.RedisURL) == "" {
-		return fmt.Errorf("DATABASE_URL and REDIS_URL are required")
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL is required")
+	}
+	if strings.TrimSpace(c.Neo4jURI) == "" {
+		return fmt.Errorf("NEO4J_URI is required")
+	}
+	if strings.TrimSpace(c.Neo4jUser) == "" {
+		return fmt.Errorf("NEO4J_USER is required")
+	}
+	if strings.TrimSpace(c.Neo4jPassword) == "" {
+		return fmt.Errorf("NEO4J_PASSWORD is required")
+	}
+	if strings.TrimSpace(c.RedisURL) == "" {
+		return fmt.Errorf("REDIS_URL is required")
 	}
 	if c.StorageMaxSizeMB <= 0 {
 		return fmt.Errorf("STORAGE_MAX_SIZE_MB must be > 0")
+	}
+	if c.StorageDriver == "s3" {
+		if strings.TrimSpace(c.S3Endpoint) == "" {
+			return fmt.Errorf("S3_ENDPOINT is required when STORAGE_DRIVER=s3")
+		}
+		if strings.TrimSpace(c.S3Bucket) == "" {
+			return fmt.Errorf("S3_BUCKET is required when STORAGE_DRIVER=s3")
+		}
+		if strings.TrimSpace(c.S3AccessKey) == "" {
+			return fmt.Errorf("S3_ACCESS_KEY is required when STORAGE_DRIVER=s3")
+		}
+		if strings.TrimSpace(c.S3SecretKey) == "" {
+			return fmt.Errorf("S3_SECRET_KEY is required when STORAGE_DRIVER=s3")
+		}
+	}
+	if c.EmbeddingDimensions <= 0 {
+		return fmt.Errorf("EMBEDDING_DIMENSIONS must be > 0")
+	}
+	if c.VectorTopK <= 0 {
+		return fmt.Errorf("VECTOR_TOP_K must be > 0")
+	}
+	if c.RoomExplorationRatio < 0 || c.RoomExplorationRatio >= 1 {
+		return fmt.Errorf("ROOM_EXPLORATION_RATIO must be >= 0 and < 1")
 	}
 	return nil
 }
@@ -172,4 +231,3 @@ func (c *Config) validate() error {
 func (c *Config) IsProduction() bool {
 	return c.Env == "production"
 }
-

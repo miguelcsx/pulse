@@ -1,13 +1,16 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -17,15 +20,25 @@ import (
 
 // ContentService handles content upload and retrieval for all content types.
 type ContentService struct {
-	db      *gorm.DB
-	storage store.Storage
-	tags    *TagService
-	media   *MediaService
-	rooms   *RoomService
+	db       *gorm.DB
+	graph    *store.GraphStore
+	storage  store.Storage
+	tags     *TagService
+	media    *MediaService
+	rooms    *RoomService
+	embedder Embedder
 }
 
-func NewContentService(db *gorm.DB, storage store.Storage, tags *TagService, media *MediaService, rooms *RoomService) *ContentService {
-	return &ContentService{db: db, storage: storage, tags: tags, media: media, rooms: rooms}
+func NewContentService(db *gorm.DB, graph *store.GraphStore, storage store.Storage, tags *TagService, media *MediaService, rooms *RoomService, embedder Embedder) *ContentService {
+	return &ContentService{
+		db:       db,
+		graph:    graph,
+		storage:  storage,
+		tags:     tags,
+		media:    media,
+		rooms:    rooms,
+		embedder: embedder,
+	}
 }
 
 // Create saves content. For image/video types, saves the file via storage.
@@ -128,6 +141,10 @@ func (s *ContentService) createContentRecord(content *model.Content, tags []mode
 		}
 	}
 
+	if err := s.syncContentToGraph(content); err != nil {
+		slog.Error("failed to sync content to graph", "content_id", content.ID, "error", err)
+	}
+
 	return content, nil
 }
 
@@ -178,6 +195,10 @@ func (s *ContentService) Delete(id uuid.UUID, userID uuid.UUID) error {
 
 	if mediaURL != "" {
 		_ = s.storage.Delete(mediaURL)
+	}
+
+	if err := s.deleteContentFromGraph(content.ID); err != nil {
+		slog.Error("failed to delete content from graph", "content_id", content.ID, "error", err)
 	}
 
 	return nil
@@ -232,6 +253,11 @@ func (s *ContentService) React(userID, contentID uuid.UUID, kind string) error {
 	}).Create(&reaction).Error; err != nil {
 		return fmt.Errorf("failed to add reaction: %w", err)
 	}
+
+	if err := s.syncReactionToGraph(userID, contentID, kind); err != nil {
+		slog.Error("failed to sync reaction to graph", "content_id", contentID, "user_id", userID, "error", err)
+	}
+
 	return nil
 }
 
@@ -242,6 +268,11 @@ func (s *ContentService) RemoveReaction(userID, contentID uuid.UUID, kind string
 	if result.Error != nil {
 		return fmt.Errorf("failed to remove reaction: %w", result.Error)
 	}
+
+	if err := s.removeReactionFromGraph(userID, contentID, kind); err != nil {
+		slog.Error("failed to remove reaction from graph", "content_id", contentID, "user_id", userID, "error", err)
+	}
+
 	return nil
 }
 
@@ -265,4 +296,154 @@ func (s *ContentService) GetReactions(contentID uuid.UUID) (map[string]int, erro
 		counts[r.Kind] = r.Count
 	}
 	return counts, nil
+}
+
+func (s *ContentService) syncContentToGraph(content *model.Content) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+
+	var embedding any // nil when no model available — omits the property from Neo4j
+	if s.embedder != nil {
+		vec, err := s.embedder.EmbedText(buildContentEmbeddingText(content))
+		if err != nil {
+			slog.Warn("embedding unavailable, content stored without vector", "content_id", content.ID, "error", err)
+		} else {
+			embedding = vec
+		}
+	}
+
+	tags := make([]map[string]any, 0, len(content.Tags))
+	for _, t := range content.Tags {
+		tags = append(tags, map[string]any{
+			"id":         t.ID.String(),
+			"name":       t.Name,
+			"usageCount": t.UsageCount,
+		})
+	}
+
+	user := content.Creator
+	// FOREACH avoids UNWIND short-circuiting the whole query when tags is empty.
+	// embedding is only SET when non-null so we don't violate the vector index dimensions.
+	query := `
+		MERGE (u:User {id: $user.id})
+		SET u.handle = $user.handle,
+		    u.displayName = $user.displayName,
+		    u.avatarUrl = $user.avatarUrl,
+		    u.bio = $user.bio,
+		    u.updatedAt = $now,
+		    u.createdAt = coalesce(u.createdAt, $now)
+		MERGE (c:Content {id: $content.id})
+		SET c.contentType = $content.contentType,
+		    c.mediaUrl = $content.mediaUrl,
+		    c.body = $content.body,
+		    c.createdAt = $content.createdAt,
+		    c.updatedAt = $content.updatedAt
+		SET c.embedding = CASE WHEN $embedding IS NOT NULL THEN $embedding ELSE c.embedding END
+		MERGE (u)-[:CREATED]->(c)
+		WITH c
+		FOREACH (tag IN $tags |
+			MERGE (t:Tag {id: tag.id})
+			SET t.name = tag.name,
+			    t.usageCount = tag.usageCount
+			MERGE (c)-[:TAGGED]->(t)
+		)
+	`
+
+	params := map[string]any{
+		"user": map[string]any{
+			"id":          user.ID.String(),
+			"handle":      user.Handle,
+			"displayName": user.DisplayName,
+			"avatarUrl":   user.AvatarURL,
+			"bio":         user.Bio,
+		},
+		"content": map[string]any{
+			"id":          content.ID.String(),
+			"contentType": content.ContentType,
+			"mediaUrl":    content.MediaURL,
+			"body":        content.Body,
+			"createdAt":   content.CreatedAt.UTC(),
+			"updatedAt":   content.UpdatedAt.UTC(),
+		},
+		"tags":      tags,
+		"embedding": embedding,
+		"now":       time.Now().UTC(),
+	}
+
+	return s.graph.RunWrite(ctx, query, params)
+}
+
+func (s *ContentService) syncReactionToGraph(userID, contentID uuid.UUID, kind string) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	query := `
+		MERGE (u:User {id: $userID})
+		MERGE (c:Content {id: $contentID})
+		MERGE (u)-[r:REACTED {kind: $kind}]->(c)
+		SET r.createdAt = coalesce(r.createdAt, datetime())
+	`
+	params := map[string]any{
+		"userID":    userID.String(),
+		"contentID": contentID.String(),
+		"kind":      kind,
+	}
+
+	return s.graph.RunWrite(ctx, query, params)
+}
+
+func (s *ContentService) removeReactionFromGraph(userID, contentID uuid.UUID, kind string) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	query := `
+		MATCH (u:User {id: $userID})-[r:REACTED {kind: $kind}]->(c:Content {id: $contentID})
+		DELETE r
+	`
+	params := map[string]any{
+		"userID":    userID.String(),
+		"contentID": contentID.String(),
+		"kind":      kind,
+	}
+
+	_, err := s.graph.ExecuteWrite(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(ctx, query, params)
+		return nil, err
+	})
+	return err
+}
+
+func (s *ContentService) deleteContentFromGraph(contentID uuid.UUID) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	query := `
+		MATCH (c:Content {id: $contentID})
+		DETACH DELETE c
+	`
+	params := map[string]any{
+		"contentID": contentID.String(),
+	}
+
+	return s.graph.RunWrite(ctx, query, params)
+}
+
+func buildContentEmbeddingText(content *model.Content) string {
+	parts := make([]string, 0, 1+len(content.Tags))
+	if strings.TrimSpace(content.Body) != "" {
+		parts = append(parts, content.Body)
+	}
+	for _, t := range content.Tags {
+		parts = append(parts, "#"+t.Name)
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }

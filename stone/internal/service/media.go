@@ -2,17 +2,21 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/pulse/stone/internal/model"
@@ -35,11 +39,19 @@ var allowedMIMEPrefixes = map[string][]string{
 	model.ContentTypeShortVideo: {"video/", "application/mp4", "application/octet-stream"},
 }
 
+const mediaTaskType = "media:process"
+
+type mediaTaskPayload struct {
+	AssetID string `json:"asset_id"`
+}
+
 // MediaService manages media asset lifecycle: ingest, processing, and ready-state delivery.
 type MediaService struct {
 	db      *gorm.DB
 	storage store.Storage
-	queue   chan uuid.UUID
+
+	queue  *asynq.Client
+	server *asynq.Server
 
 	shutdownOnce sync.Once
 	done         chan struct{}
@@ -99,19 +111,67 @@ func NewMediaService(db *gorm.DB, storage store.Storage) *MediaService {
 	s := &MediaService{
 		db:      db,
 		storage: storage,
-		queue:   make(chan uuid.UUID, 1024),
 		done:    make(chan struct{}),
 	}
-	go s.runProcessor()
+
+	if err := s.initQueue(); err != nil {
+		slog.Error("media queue init failed; falling back to inline processing", "error", err)
+	}
+
 	s.recoverOnStartup()
 	return s
+}
+
+func (s *MediaService) initQueue() error {
+	redisURL := strings.TrimSpace(os.Getenv("REDIS_URL"))
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379/0"
+	}
+
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse redis url: %w", err)
+	}
+
+	clientOpt := asynq.RedisClientOpt{
+		Addr:     opts.Addr,
+		Password: opts.Password,
+		DB:       opts.DB,
+	}
+
+	s.queue = asynq.NewClient(clientOpt)
+	s.server = asynq.NewServer(clientOpt, asynq.Config{
+		Concurrency: 10,
+		Queues: map[string]int{
+			"media": 1,
+		},
+	})
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(mediaTaskType, s.handleProcessMediaTask)
+
+	go func() {
+		defer close(s.done)
+		if err := s.server.Run(mux); err != nil {
+			slog.Error("media worker stopped", "error", err)
+		}
+	}()
+
+	return nil
 }
 
 // Shutdown gracefully drains the processing queue and stops the processor goroutine.
 func (s *MediaService) Shutdown() {
 	s.shutdownOnce.Do(func() {
-		close(s.queue)
-		<-s.done
+		if s.server != nil {
+			s.server.Shutdown()
+		}
+		if s.queue != nil {
+			_ = s.queue.Close()
+		}
+		if s.done != nil {
+			<-s.done
+		}
 	})
 }
 
@@ -260,27 +320,34 @@ func (s *MediaService) GetReadyForOwner(assetID, ownerID uuid.UUID) (*model.Medi
 }
 
 func (s *MediaService) enqueue(assetID uuid.UUID) {
-	select {
-	case s.queue <- assetID:
-	default:
-		// Queue full — spawn a goroutine to avoid blocking the caller.
+	if s.queue == nil {
 		go func() {
-			defer func() { recover() }() // guard against closed channel
-			s.queue <- assetID
+			if err := s.processAsset(assetID); err != nil {
+				slog.Error("media processing failed (inline)", "asset_id", assetID, "error", err)
+			}
 		}()
+		return
+	}
+
+	payload, _ := json.Marshal(mediaTaskPayload{AssetID: assetID.String()})
+	task := asynq.NewTask(mediaTaskType, payload)
+	if _, err := s.queue.Enqueue(task, asynq.Queue("media")); err != nil {
+		slog.Error("failed to enqueue media task", "asset_id", assetID, "error", err)
 	}
 }
 
-func (s *MediaService) runProcessor() {
-	defer close(s.done)
-	for assetID := range s.queue {
-		if err := s.processAsset(assetID); err != nil {
-			slog.Error("media processing failed",
-				"asset_id", assetID,
-				"error", err,
-			)
-		}
+func (s *MediaService) handleProcessMediaTask(_ context.Context, t *asynq.Task) error {
+	var payload mediaTaskPayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return err
 	}
+
+	assetID, err := uuid.Parse(payload.AssetID)
+	if err != nil {
+		return err
+	}
+
+	return s.processAsset(assetID)
 }
 
 func (s *MediaService) processAsset(assetID uuid.UUID) error {

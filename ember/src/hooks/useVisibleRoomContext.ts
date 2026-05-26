@@ -7,7 +7,9 @@ export function useVisibleRoomContext(items: FeedItem[]) {
   const visibleIds = useRef(new Set<string>());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const computeDominantRoom = useCallback(() => {
     const roomCounts = new Map<string, { count: number; item: FeedItem }>();

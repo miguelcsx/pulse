@@ -21,7 +21,7 @@ export default function SuggestionCard({ suggestion, compact }: Props) {
 
   return (
     <div
-      className={`bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] ${compact ? "p-3" : "p-4"}`}
+      className={`glass premium-card rounded-xl ${compact ? "p-3" : "p-5"}`}
       style={{ borderLeftWidth: 3, borderLeftColor: borderColor }}
     >
       <div className="flex items-center justify-between">

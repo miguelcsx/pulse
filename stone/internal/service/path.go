@@ -1,15 +1,18 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"gorm.io/gorm"
 
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/store"
 )
 
 // PathItemInput represents input for creating a path item.
@@ -20,12 +23,13 @@ type PathItemInput struct {
 
 // PathService handles curated content paths.
 type PathService struct {
-	db *gorm.DB
+	db    *gorm.DB
+	graph *store.GraphStore
 }
 
 // NewPathService creates a new PathService.
-func NewPathService(db *gorm.DB) *PathService {
-	return &PathService{db: db}
+func NewPathService(db *gorm.DB, graph *store.GraphStore) *PathService {
+	return &PathService{db: db, graph: graph}
 }
 
 // Create creates a new path with sequential path items.
@@ -68,6 +72,10 @@ func (s *PathService) Create(creatorID uuid.UUID, title, description string, ite
 		Preload("Items.Content.Tags").
 		First(path, "id = ?", path.ID).Error; err != nil {
 		return nil, fmt.Errorf("failed to reload path: %w", err)
+	}
+
+	if err := s.syncPathToGraph(path); err != nil {
+		slog.Error("failed to sync path to graph", "path_id", path.ID, "error", err)
 	}
 
 	return path, nil
@@ -133,7 +141,7 @@ func (s *PathService) List(limit int, cursor string) ([]model.Path, string, bool
 
 // Follow creates a path follow and increments the follower count.
 func (s *PathService) Follow(pathID, userID uuid.UUID) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		follow := model.PathFollow{
 			PathID:    pathID,
 			UserID:    userID,
@@ -150,12 +158,16 @@ func (s *PathService) Follow(pathID, userID uuid.UUID) error {
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	return s.syncPathFollowToGraph(pathID, userID)
 }
 
 // Unfollow removes a path follow and decrements the follower count.
 func (s *PathService) Unfollow(pathID, userID uuid.UUID) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		result := tx.Where("path_id = ? AND user_id = ?", pathID, userID).
 			Delete(&model.PathFollow{})
 		if result.Error != nil {
@@ -172,7 +184,11 @@ func (s *PathService) Unfollow(pathID, userID uuid.UUID) error {
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	return s.removePathFollowFromGraph(pathID, userID)
 }
 
 // IsFollowing checks whether a user is following a specific path.
@@ -188,6 +204,96 @@ func (s *PathService) IsFollowing(pathID, userID uuid.UUID) (bool, error) {
 		return false, fmt.Errorf("failed to check path follow: %w", err)
 	}
 	return count > 0, nil
+}
+
+func (s *PathService) syncPathToGraph(path *model.Path) error {
+	if s.graph == nil || path == nil {
+		return nil
+	}
+
+	items := make([]map[string]any, 0, len(path.Items))
+	for _, item := range path.Items {
+		items = append(items, map[string]any{
+			"contentId": item.ContentID.String(),
+			"position":  item.Position,
+			"note":      item.Note,
+		})
+	}
+
+	query := `
+		MERGE (p:Path {id: $pathId})
+		SET p.title = $title,
+		    p.description = $description,
+		    p.systemGenerated = $systemGenerated,
+		    p.followerCount = $followerCount,
+		    p.createdAt = $createdAt,
+		    p.updatedAt = $updatedAt
+		MERGE (u:User {id: $creatorId})
+		MERGE (u)-[:CREATED_PATH]->(p)
+		WITH p
+		UNWIND $items AS item
+		MATCH (c:Content {id: item.contentId})
+		MERGE (p)-[r:HAS_ITEM]->(c)
+		SET r.position = item.position,
+		    r.note = item.note
+	`
+
+	_, err := s.graph.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(context.Background(), query, map[string]any{
+			"pathId":          path.ID.String(),
+			"title":           path.Title,
+			"description":     path.Description,
+			"systemGenerated": path.SystemGenerated,
+			"followerCount":   path.FollowerCount,
+			"createdAt":       path.CreatedAt,
+			"updatedAt":       path.UpdatedAt,
+			"creatorId":       path.CreatorID.String(),
+			"items":           items,
+		})
+		return nil, err
+	})
+	return err
+}
+
+func (s *PathService) syncPathFollowToGraph(pathID, userID uuid.UUID) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	query := `
+		MERGE (u:User {id: $userId})
+		MERGE (p:Path {id: $pathId})
+		MERGE (u)-[:FOLLOWS_PATH]->(p)
+	`
+
+	_, err := s.graph.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(context.Background(), query, map[string]any{
+			"userId": userID.String(),
+			"pathId": pathID.String(),
+		})
+		return nil, err
+	})
+	return err
+}
+
+func (s *PathService) removePathFollowFromGraph(pathID, userID uuid.UUID) error {
+	if s.graph == nil {
+		return nil
+	}
+
+	query := `
+		MATCH (u:User {id: $userId})-[r:FOLLOWS_PATH]->(p:Path {id: $pathId})
+		DELETE r
+	`
+
+	_, err := s.graph.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(context.Background(), query, map[string]any{
+			"userId": userID.String(),
+			"pathId": pathID.String(),
+		})
+		return nil, err
+	})
+	return err
 }
 
 // GenerateFromRecentContent auto-generates paths by clustering recent content
@@ -281,6 +387,18 @@ func (s *PathService) GenerateFromRecentContent() {
 		if err != nil {
 			slog.Error("path generation: failed to create path", "tag", qt.Name, "error", err)
 			continue
+		}
+
+		path.Items = make([]model.PathItem, 0, len(contents))
+		for i, c := range contents {
+			path.Items = append(path.Items, model.PathItem{
+				PathID:    path.ID,
+				ContentID: c.ID,
+				Position:  i + 1,
+			})
+		}
+		if err := s.syncPathToGraph(path); err != nil {
+			slog.Error("path generation: failed to sync path", "tag", qt.Name, "error", err)
 		}
 
 		slog.Info("path generation: created auto-path", "tag", qt.Name, "items", len(contents))

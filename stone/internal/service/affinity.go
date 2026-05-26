@@ -1,22 +1,27 @@
 package service
 
 import (
+	"context"
 	"fmt"
+	"math"
+	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 
+	"github.com/pulse/stone/internal/config"
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/store"
 )
 
 // SuggestionType categorises how a suggestion was derived.
 type SuggestionType string
 
 const (
-	SuggestionClosestTwin  SuggestionType = "closest_twin"
+	SuggestionClosestTwin   SuggestionType = "closest_twin"
 	SuggestionAdjacentTaste SuggestionType = "adjacent_taste"
-	SuggestionPathAffinity SuggestionType = "path_affinity"
-	SuggestionSerendipity  SuggestionType = "serendipity"
+	SuggestionPathAffinity  SuggestionType = "path_affinity"
+	SuggestionSerendipity   SuggestionType = "serendipity"
 )
 
 // SuggestionResult represents a user suggestion with a "Bridge" — the reason
@@ -39,32 +44,13 @@ type BucketedSuggestions struct {
 	Serendipity   []SuggestionResult `json:"serendipity"`
 }
 
-type suggestionRow struct {
-	ID            uuid.UUID `gorm:"column:id"`
-	Handle        string    `gorm:"column:handle"`
-	DisplayName   string    `gorm:"column:display_name"`
-	AvatarURL     string    `gorm:"column:avatar_url"`
-	Bio           string    `gorm:"column:bio"`
-	SharedTags    int       `gorm:"column:shared_tags"`
-	AffinityScore float64   `gorm:"column:affinity_score"`
-}
-
-type pathAffinityRow struct {
-	ID          uuid.UUID `gorm:"column:id"`
-	Handle      string    `gorm:"column:handle"`
-	DisplayName string    `gorm:"column:display_name"`
-	AvatarURL   string    `gorm:"column:avatar_url"`
-	Bio         string    `gorm:"column:bio"`
-	PathCount   int       `gorm:"column:path_count"`
-}
-
-// AffinityService provides user suggestions based on shared tag overlap.
 type AffinityService struct {
-	db *gorm.DB
+	graph *store.GraphStore
+	cfg   *config.Config
 }
 
-func NewAffinityService(db *gorm.DB) *AffinityService {
-	return &AffinityService{db: db}
+func NewAffinityService(graph *store.GraphStore, cfg *config.Config) *AffinityService {
+	return &AffinityService{graph: graph, cfg: cfg}
 }
 
 // GetSuggestionsBucketed returns suggestions in four categorised buckets:
@@ -80,94 +66,81 @@ func (s *AffinityService) GetSuggestionsBucketed(userID uuid.UUID, limit int) (*
 	seen := map[uuid.UUID]struct{}{userID: {}}
 	result := &BucketedSuggestions{}
 
+	ctx := context.Background()
+
 	// 1. Path affinity (max 3) — highest priority
-	pathRows, err := s.getPathAffinityRows(userID, 3)
+	pathRows, err := s.queryPathAffinity(ctx, userID, 3)
 	if err != nil {
 		return nil, fmt.Errorf("path affinity: %w", err)
 	}
-	for _, r := range pathRows {
-		if _, ok := seen[r.ID]; ok {
+	for _, row := range pathRows {
+		if _, ok := seen[row.user.ID]; ok {
 			continue
 		}
-		seen[r.ID] = struct{}{}
+		seen[row.user.ID] = struct{}{}
 
-		user := model.User{
-			ID: r.ID, Handle: r.Handle, DisplayName: r.DisplayName,
-			AvatarURL: r.AvatarURL, Bio: r.Bio,
-		}
-
-		commonTags, _ := s.getCommonTags(userID, r.ID)
-		bridge := s.buildPathAffinityBridge(userID, r.ID, r.PathCount, commonTags)
+		commonTags, _ := s.getCommonTags(ctx, userID, row.user.ID)
+		bridge := s.buildPathAffinityBridge(ctx, userID, row.user.ID, row.pathCount, commonTags)
 
 		result.PathAffinity = append(result.PathAffinity, SuggestionResult{
-			User:           user,
-			SharedTags:     len(commonTags),
+			User:           row.user,
+			SharedTags:     row.sharedTags,
 			CommonTags:     commonTags,
 			Bridge:         bridge,
 			SuggestionType: SuggestionPathAffinity,
-			PathCount:      r.PathCount,
+			PathCount:      row.pathCount,
 		})
 	}
 
-	// 2. Closest twins — behavioral affinity from edges
-	edgeRows, err := s.getEdgeRows(userID, limit)
+	// 2. Closest twins — behavioral affinity from reactions (with decay)
+	closest, err := s.queryClosestTwins(ctx, userID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("closest twins: %w", err)
 	}
-	for _, r := range edgeRows {
-		if _, ok := seen[r.ID]; ok {
+	for _, row := range closest {
+		if _, ok := seen[row.user.ID]; ok {
 			continue
 		}
-		seen[r.ID] = struct{}{}
+		seen[row.user.ID] = struct{}{}
 
-		user := model.User{
-			ID: r.ID, Handle: r.Handle, DisplayName: r.DisplayName,
-			AvatarURL: r.AvatarURL, Bio: r.Bio,
-		}
-
-		commonTags, _ := s.getCommonTags(userID, r.ID)
+		commonTags, _ := s.getCommonTags(ctx, userID, row.user.ID)
 		bridgeTags := filterBridgeTags(commonTags)
 		bridge := buildClosestTwinBridge(bridgeTags, len(commonTags))
 
 		result.ClosestTwins = append(result.ClosestTwins, SuggestionResult{
-			User:           user,
+			User:           row.user,
 			SharedTags:     len(commonTags),
 			CommonTags:     commonTags,
 			Bridge:         bridge,
-			Affinity:       r.AffinityScore,
+			Affinity:       row.affinityScore,
 			SuggestionType: SuggestionClosestTwin,
 		})
 	}
 
 	// 3. Adjacent taste — tag overlap
-	tagRows, err := s.getTagOverlapRows(userID, limit*3)
+	adjacent, err := s.queryAdjacentTaste(ctx, userID, limit*3)
 	if err != nil {
 		return nil, fmt.Errorf("adjacent taste: %w", err)
 	}
-	for _, r := range tagRows {
+	for _, row := range adjacent {
 		if len(result.AdjacentTaste) >= limit {
 			break
 		}
-		if _, ok := seen[r.ID]; ok {
+		if _, ok := seen[row.user.ID]; ok {
 			continue
 		}
-		seen[r.ID] = struct{}{}
+		seen[row.user.ID] = struct{}{}
 
-		user := model.User{
-			ID: r.ID, Handle: r.Handle, DisplayName: r.DisplayName,
-			AvatarURL: r.AvatarURL, Bio: r.Bio,
-		}
-
-		commonTags, _ := s.getCommonTags(userID, r.ID)
+		commonTags, _ := s.getCommonTags(ctx, userID, row.user.ID)
 		bridgeTags := filterBridgeTags(commonTags)
-		sharedTags := r.SharedTags
+		sharedTags := row.sharedTags
 		if sharedTags == 0 {
 			sharedTags = len(commonTags)
 		}
 		bridge := buildBridge(bridgeTags, sharedTags)
 
 		result.AdjacentTaste = append(result.AdjacentTaste, SuggestionResult{
-			User:           user,
+			User:           row.user,
 			SharedTags:     sharedTags,
 			CommonTags:     commonTags,
 			Bridge:         bridge,
@@ -176,27 +149,22 @@ func (s *AffinityService) GetSuggestionsBucketed(userID uuid.UUID, limit int) (*
 	}
 
 	// 4. Serendipity (max 3) — filter bubble prevention
-	serendipityRows, err := s.getSerendipityRows(userID, 3)
+	serendipity, err := s.querySerendipity(ctx, userID, 3)
 	if err != nil {
 		return nil, fmt.Errorf("serendipity: %w", err)
 	}
-	for _, r := range serendipityRows {
-		if _, ok := seen[r.ID]; ok {
+	for _, row := range serendipity {
+		if _, ok := seen[row.user.ID]; ok {
 			continue
 		}
-		seen[r.ID] = struct{}{}
+		seen[row.user.ID] = struct{}{}
 
-		user := model.User{
-			ID: r.ID, Handle: r.Handle, DisplayName: r.DisplayName,
-			AvatarURL: r.AvatarURL, Bio: r.Bio,
-		}
-
-		commonTags, _ := s.getCommonTags(userID, r.ID)
+		commonTags, _ := s.getCommonTags(ctx, userID, row.user.ID)
 		bridgeTags := filterBridgeTags(commonTags)
 		bridge := buildSerendipityBridge(bridgeTags)
 
 		result.Serendipity = append(result.Serendipity, SuggestionResult{
-			User:           user,
+			User:           row.user,
 			SharedTags:     len(commonTags),
 			CommonTags:     commonTags,
 			Bridge:         bridge,
@@ -232,184 +200,241 @@ func (s *AffinityService) GetSuggestions(userID uuid.UUID, limit int) ([]Suggest
 	return results, nil
 }
 
-// --- Query methods ---
+type affinityRow struct {
+	user          model.User
+	sharedTags    int
+	pathCount     int
+	affinityScore float64
+}
 
-// getPathAffinityRows finds creators whose paths the user has followed (>=2).
-func (s *AffinityService) getPathAffinityRows(userID uuid.UUID, limit int) ([]pathAffinityRow, error) {
-	var rows []pathAffinityRow
-	err := s.db.Raw(`
-		SELECT p.creator_id AS id, u.handle, u.display_name, u.avatar_url, u.bio,
-		       COUNT(DISTINCT pf.path_id) AS path_count
-		FROM path_follows pf
-		JOIN paths p ON p.id = pf.path_id
-		JOIN users u ON u.id = p.creator_id
-		WHERE pf.user_id = ? AND p.creator_id != ?
-		  AND NOT EXISTS (
-		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = p.creator_id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = p.creator_id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = p.creator_id
-		  )
-		GROUP BY p.creator_id, u.handle, u.display_name, u.avatar_url, u.bio
-		HAVING COUNT(DISTINCT pf.path_id) >= 2
-		ORDER BY path_count DESC
-		LIMIT ?
-	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
+func (s *AffinityService) queryPathAffinity(ctx context.Context, userID uuid.UUID, limit int) ([]affinityRow, error) {
+	query := `
+		MATCH (u1:User {id: $userID})-[:CREATED_PATH]->(:Path)-[:HAS_ITEM]->(:Content)-[:TAGGED]->(t:Tag)
+		MATCH (u2:User)-[:CREATED_PATH]->(p2:Path)-[:HAS_ITEM]->(:Content)-[:TAGGED]->(t)
+		WHERE u2.id <> $userID
+		  AND NOT (u1)-[:FOLLOWS|BLOCKS]->(u2)
+		  AND NOT (u2)-[:BLOCKS]->(u1)
+		WITH u2, count(DISTINCT t) AS sharedTags, count(DISTINCT p2) AS pathCount
+		WHERE sharedTags >= 2
+		RETURN u2 { .id, .handle, .displayName, .avatarUrl, .bio } AS user,
+		       sharedTags AS sharedTags,
+		       pathCount AS pathCount
+		ORDER BY sharedTags DESC, pathCount DESC
+		LIMIT $limit
+	`
+
+	rows, err := s.readRows(ctx, query, map[string]any{
+		"userID": userID.String(),
+		"limit":  limit,
+	})
 	if err != nil {
 		return nil, err
+	}
+
+	out := make([]affinityRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, affinityRow{
+			user:       row.user,
+			sharedTags: row.sharedTags,
+			pathCount:  row.pathCount,
+		})
+	}
+	return out, nil
+}
+
+func (s *AffinityService) queryClosestTwins(ctx context.Context, userID uuid.UUID, limit int) ([]affinityRow, error) {
+	halfLife := s.cfg.AffinityHalfLife30DDays
+	if halfLife <= 0 {
+		halfLife = 15
+	}
+	lambda := math.Ln2 / halfLife
+
+	query := `
+		MATCH (u1:User {id: $userID})-[r1:REACTED]->(c:Content)<-[r2:REACTED]-(u2:User)
+		WHERE u2.id <> $userID
+		  AND NOT (u1)-[:FOLLOWS|BLOCKS]->(u2)
+		  AND NOT (u2)-[:BLOCKS]->(u1)
+		WITH u2,
+		     sum(exp(-$lambda * duration.inDays(r1.createdAt, datetime()).days)) AS score
+		WHERE score > 0
+		RETURN u2 { .id, .handle, .displayName, .avatarUrl, .bio } AS user,
+		       score AS affinityScore
+		ORDER BY score DESC
+		LIMIT $limit
+	`
+
+	rows, err := s.readRows(ctx, query, map[string]any{
+		"userID": userID.String(),
+		"lambda": lambda,
+		"limit":  limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]affinityRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, affinityRow{
+			user:          row.user,
+			affinityScore: row.affinityScore,
+		})
+	}
+	return out, nil
+}
+
+func (s *AffinityService) queryAdjacentTaste(ctx context.Context, userID uuid.UUID, limit int) ([]affinityRow, error) {
+	query := `
+		MATCH (u1:User {id: $userID})-[:CREATED]->(:Content)-[:TAGGED]->(t:Tag)<-[:TAGGED]-(:Content)<-[:CREATED]-(u2:User)
+		WHERE u2.id <> $userID
+		  AND NOT (u1)-[:FOLLOWS|BLOCKS]->(u2)
+		  AND NOT (u2)-[:BLOCKS]->(u1)
+		WITH u2, count(DISTINCT t) AS sharedTags
+		RETURN u2 { .id, .handle, .displayName, .avatarUrl, .bio } AS user,
+		       sharedTags AS sharedTags
+		ORDER BY sharedTags DESC
+		LIMIT $limit
+	`
+
+	return s.readRows(ctx, query, map[string]any{
+		"userID": userID.String(),
+		"limit":  limit,
+	})
+}
+
+func (s *AffinityService) querySerendipity(ctx context.Context, userID uuid.UUID, limit int) ([]affinityRow, error) {
+	query := `
+		MATCH (u1:User {id: $userID})-[:CREATED]->(:Content)-[:TAGGED]->(t:Tag)<-[:TAGGED]-(:Content)<-[:CREATED]-(u2:User)
+		WHERE u2.id <> $userID
+		  AND NOT (u1)-[:FOLLOWS|BLOCKS]->(u2)
+		  AND NOT (u2)-[:BLOCKS]->(u1)
+		WITH u2, collect(DISTINCT t) AS tags, count(DISTINCT t) AS sharedTags, max(t.usageCount) AS maxUsage
+		WHERE sharedTags >= 1 AND sharedTags <= 2 AND maxUsage >= 5
+		RETURN u2 { .id, .handle, .displayName, .avatarUrl, .bio } AS user,
+		       sharedTags AS sharedTags
+		ORDER BY maxUsage DESC, rand()
+		LIMIT $limit
+	`
+
+	return s.readRows(ctx, query, map[string]any{
+		"userID": userID.String(),
+		"limit":  limit,
+	})
+}
+
+type mappedRow struct {
+	user          model.User
+	sharedTags    int
+	pathCount     int
+	affinityScore float64
+}
+
+func (s *AffinityService) readRows(ctx context.Context, query string, params map[string]any) ([]affinityRow, error) {
+	raw, err := s.graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, params)
+		if err != nil {
+			return nil, err
+		}
+
+		rows := make([]affinityRow, 0)
+		for result.Next(ctx) {
+			record := result.Record()
+
+			userAny, _ := record.Get("user")
+			user, err := mapUser(userAny)
+			if err != nil {
+				return nil, err
+			}
+
+			row := affinityRow{user: user}
+
+			if v, ok := record.Get("sharedTags"); ok {
+				row.sharedTags = toInt(v)
+			}
+			if v, ok := record.Get("pathCount"); ok {
+				row.pathCount = toInt(v)
+			}
+			if v, ok := record.Get("affinityScore"); ok {
+				row.affinityScore = toFloat(v)
+			}
+
+			rows = append(rows, row)
+		}
+		if err := result.Err(); err != nil {
+			return nil, err
+		}
+		return rows, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	rows, ok := raw.([]affinityRow)
+	if !ok {
+		return nil, fmt.Errorf("failed to decode affinity rows")
 	}
 	return rows, nil
 }
 
-// getSerendipityRows finds users with low tag overlap (1-2 shared) but at
-// least one high-quality tag, preventing filter bubbles.
-func (s *AffinityService) getSerendipityRows(userID uuid.UUID, limit int) ([]suggestionRow, error) {
-	var rows []suggestionRow
-	err := s.db.Raw(`
-		SELECT u.id, u.handle, u.display_name, u.avatar_url, u.bio,
-		       COUNT(DISTINCT ct.tag_id) AS shared_tags,
-		       0.0 AS affinity_score
-		FROM users u
-		JOIN contents c ON c.creator_id = u.id
-		JOIN content_tags ct ON ct.content_id = c.id
-		JOIN tags t ON t.id = ct.tag_id
-		WHERE ct.tag_id IN (
-			SELECT DISTINCT ct2.tag_id FROM contents c2
-			JOIN content_tags ct2 ON ct2.content_id = c2.id
-			WHERE c2.creator_id = ?
-		)
-		  AND u.id != ?
-		  AND NOT EXISTS (
-		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = u.id
-		  )
-		GROUP BY u.id, u.handle, u.display_name, u.avatar_url, u.bio
-		HAVING COUNT(DISTINCT ct.tag_id) BETWEEN 1 AND 2
-		   AND MAX(t.usage_count) >= 5
-		ORDER BY MAX(t.usage_count) DESC, RANDOM()
-		LIMIT ?
-	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
+func (s *AffinityService) getCommonTags(ctx context.Context, userA, userB uuid.UUID) ([]model.Tag, error) {
+	query := `
+		MATCH (u1:User {id: $userA})-[:CREATED]->(:Content)-[:TAGGED]->(t:Tag)<-[:TAGGED]-(:Content)<-[:CREATED]-(u2:User {id: $userB})
+		RETURN collect(DISTINCT t { .id, .name, .usageCount }) AS tags
+	`
 
-// getEdgeRows retrieves suggestion candidates from pre-computed affinity edges.
-func (s *AffinityService) getEdgeRows(userID uuid.UUID, limit int) ([]suggestionRow, error) {
-	var rows []suggestionRow
-	err := s.db.Raw(`
-		SELECT u.id, u.handle, u.display_name, u.avatar_url, u.bio,
-		       0 AS shared_tags,
-		       e.score_30d AS affinity_score
-		FROM user_affinity_edges e
-		JOIN users u ON u.id = e.other_user_id
-		WHERE e.user_id = ?
-		  AND u.id != ?
-		  AND e.score_30d > 0
-		  AND NOT EXISTS (
-		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = u.id
-		  )
-		ORDER BY e.score_30d DESC, e.updated_at DESC
-		LIMIT ?
-	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
+	raw, err := s.graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]any{
+			"userA": userA.String(),
+			"userB": userB.String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !result.Next(ctx) {
+			return []model.Tag{}, nil
+		}
+		tagsAny, _ := result.Record().Get("tags")
+		tags, err := mapTags(tagsAny)
+		if err != nil {
+			return nil, err
+		}
+		return tags, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return rows, nil
-}
-
-// getTagOverlapRows retrieves suggestion candidates based on shared tag usage.
-func (s *AffinityService) getTagOverlapRows(userID uuid.UUID, limit int) ([]suggestionRow, error) {
-	var rows []suggestionRow
-	err := s.db.Raw(`
-		SELECT u.id, u.handle, u.display_name, u.avatar_url, u.bio,
-		       COUNT(DISTINCT ct.tag_id) AS shared_tags,
-		       0.0 AS affinity_score
-		FROM users u
-		JOIN contents c ON c.creator_id = u.id
-		JOIN content_tags ct ON ct.content_id = c.id
-		WHERE ct.tag_id IN (
-			SELECT DISTINCT ct2.tag_id FROM contents c2
-			JOIN content_tags ct2 ON ct2.content_id = c2.id
-			WHERE c2.creator_id = ?
-		)
-		  AND u.id != ?
-		  AND NOT EXISTS (
-		      SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = u.id
-		  )
-		  AND NOT EXISTS (
-		      SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = u.id
-		  )
-		GROUP BY u.id, u.handle, u.display_name, u.avatar_url, u.bio
-		ORDER BY shared_tags DESC, u.created_at DESC
-		LIMIT ?
-	`, userID, userID, userID, userID, userID, limit).Scan(&rows).Error
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func (s *AffinityService) getCommonTags(userA, userB uuid.UUID) ([]model.Tag, error) {
-	var tags []model.Tag
-	err := s.db.Raw(`
-		SELECT DISTINCT t.*
-		FROM tags t
-		WHERE t.id IN (
-			SELECT ct.tag_id FROM contents c
-			JOIN content_tags ct ON ct.content_id = c.id
-			WHERE c.creator_id = ?
-		)
-		AND t.id IN (
-			SELECT ct.tag_id FROM contents c
-			JOIN content_tags ct ON ct.content_id = c.id
-			WHERE c.creator_id = ?
-		)
-		ORDER BY t.usage_count DESC
-		LIMIT 10
-	`, userA, userB).Scan(&tags).Error
-	if err != nil {
-		return nil, err
-	}
-	return tags, nil
+	return raw.([]model.Tag), nil
 }
 
 // getPathTags returns the top tags from paths a user follows by a given creator.
-func (s *AffinityService) getPathTags(userID, creatorID uuid.UUID) ([]model.Tag, error) {
-	var tags []model.Tag
-	err := s.db.Raw(`
-		SELECT DISTINCT t.*
-		FROM tags t
-		JOIN content_tags ct ON ct.tag_id = t.id
-		JOIN path_items pi ON pi.content_id = ct.content_id
-		JOIN path_follows pf ON pf.path_id = pi.path_id
-		JOIN paths p ON p.id = pi.path_id
-		WHERE pf.user_id = ? AND p.creator_id = ?
-		ORDER BY t.usage_count DESC
-		LIMIT 5
-	`, userID, creatorID).Scan(&tags).Error
+func (s *AffinityService) getPathTags(ctx context.Context, userID, creatorID uuid.UUID) ([]model.Tag, error) {
+	query := `
+		MATCH (viewer:User {id: $viewerID})-[:FOLLOWS_PATH]->(p:Path)<-[:CREATED_PATH]-(creator:User {id: $creatorID})
+		MATCH (p)-[:HAS_ITEM]->(:Content)-[:TAGGED]->(t:Tag)
+		RETURN collect(DISTINCT t { .id, .name, .usageCount }) AS tags
+	`
+
+	raw, err := s.graph.ExecuteRead(ctx, func(tx neo4j.ManagedTransaction) (any, error) {
+		result, err := tx.Run(ctx, query, map[string]any{
+			"viewerID":  userID.String(),
+			"creatorID": creatorID.String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !result.Next(ctx) {
+			return []model.Tag{}, nil
+		}
+		tagsAny, _ := result.Record().Get("tags")
+		tags, err := mapTags(tagsAny)
+		if err != nil {
+			return nil, err
+		}
+		return tags, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return tags, nil
+	return raw.([]model.Tag), nil
 }
 
 // --- Bridge builders ---
@@ -457,8 +482,8 @@ func joinTagNames(names []string) string {
 	return result
 }
 
-func (s *AffinityService) buildPathAffinityBridge(userID, creatorID uuid.UUID, pathCount int, commonTags []model.Tag) string {
-	pathTags, _ := s.getPathTags(userID, creatorID)
+func (s *AffinityService) buildPathAffinityBridge(ctx context.Context, userID, creatorID uuid.UUID, pathCount int, commonTags []model.Tag) string {
+	pathTags, _ := s.getPathTags(ctx, userID, creatorID)
 	bridgeTags := filterBridgeTags(pathTags)
 	names := tagNames(bridgeTags, 3)
 	if len(names) > 0 {
@@ -507,4 +532,92 @@ func buildSerendipityBridge(tags []model.Tag) string {
 		return "A fresh perspective worth exploring"
 	}
 	return fmt.Sprintf("Different style, but you're both deep into %s", names[0])
+}
+
+// --- Mapping helpers ---
+
+func mapUser(node any) (model.User, error) {
+	props, ok := node.(map[string]any)
+	if !ok {
+		return model.User{}, fmt.Errorf("invalid user payload")
+	}
+
+	idStr, _ := props["id"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return model.User{}, fmt.Errorf("invalid user id: %w", err)
+	}
+
+	user := model.User{
+		ID:          id,
+		Handle:      toString(props["handle"]),
+		DisplayName: toString(props["displayName"]),
+		AvatarURL:   toString(props["avatarUrl"]),
+		Bio:         toString(props["bio"]),
+	}
+
+	return user, nil
+}
+
+func mapTags(tagsAny any) ([]model.Tag, error) {
+	raw, ok := tagsAny.([]any)
+	if !ok {
+		return []model.Tag{}, nil
+	}
+
+	tags := make([]model.Tag, 0, len(raw))
+	for _, item := range raw {
+		props, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		idStr, _ := props["id"].(string)
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			continue
+		}
+		tags = append(tags, model.Tag{
+			ID:         id,
+			Name:       toString(props["name"]),
+			UsageCount: toInt(props["usageCount"]),
+			CreatedAt:  time.Time{},
+		})
+	}
+	return tags, nil
+}
+
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func toInt(v any) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	default:
+		return 0
+	}
+}
+
+func toFloat(v any) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	default:
+		return 0
+	}
 }

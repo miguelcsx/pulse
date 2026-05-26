@@ -213,11 +213,11 @@ func (s *EventService) applyAffinityDelta(tx *gorm.DB, userID, otherUserID uuid.
 			ON CONFLICT (user_id, other_user_id) DO UPDATE SET
 				score_7d = GREATEST(
 					0,
-					user_affinity_edges.score_7d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (? - user_affinity_edges.last_signal_at)), 0)) + ?
+					user_affinity_edges.score_7d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - user_affinity_edges.last_signal_at)), 0)) + ?
 				),
 				score_30d = GREATEST(
 					0,
-					user_affinity_edges.score_30d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (? - user_affinity_edges.last_signal_at)), 0)) + ?
+					user_affinity_edges.score_30d * EXP(-? * GREATEST(EXTRACT(EPOCH FROM (CAST(? AS timestamptz) - user_affinity_edges.last_signal_at)), 0)) + ?
 				),
 				last_signal_at = ?,
 				updated_at = ?

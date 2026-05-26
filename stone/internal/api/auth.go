@@ -41,7 +41,11 @@ func (s *Server) Register(c *gin.Context) {
 
 	user, accessToken, refreshToken, err := s.authService.Register(req.Handle, req.Email, req.Password, req.DisplayName)
 	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "handle or email already taken"})
+		if errors.Is(err, service.ErrDuplicateUser) {
+			c.JSON(http.StatusConflict, gin.H{"error": "handle or email already taken"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create account"})
 		return
 	}
 

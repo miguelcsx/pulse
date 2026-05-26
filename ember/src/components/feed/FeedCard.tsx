@@ -68,7 +68,7 @@ export default function FeedCard({ content, onClick }: Props) {
     <article
       ref={dwellRef}
       data-content-id={content.id}
-      className="snap-start bg-[var(--color-surface)] rounded-none sm:rounded-lg overflow-hidden border-y sm:border border-[var(--color-border)] min-h-[calc(100dvh-9.5rem)] sm:min-h-0"
+      className="snap-start glass premium-card rounded-none sm:rounded-xl overflow-hidden border-y sm:border border-[var(--color-border)] min-h-[calc(100dvh-9.5rem)] sm:min-h-0"
     >
       <div className="flex items-center gap-3 p-3">
         <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-sm font-medium text-white">

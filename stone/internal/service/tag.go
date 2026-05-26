@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/pulse/stone/internal/model"
+	"github.com/pulse/stone/internal/store"
 )
 
 const (
@@ -23,15 +25,16 @@ const (
 // TagService handles user-defined hashtag creation and lookup.
 type TagService struct {
 	db       *gorm.DB
+	graph    *store.GraphStore
 	rdb      *redis.Client
 	cacheTTL time.Duration
 }
 
-func NewTagService(db *gorm.DB, rdb *redis.Client, cacheTTL time.Duration) *TagService {
+func NewTagService(db *gorm.DB, graph *store.GraphStore, rdb *redis.Client, cacheTTL time.Duration) *TagService {
 	if cacheTTL <= 0 {
 		cacheTTL = 5 * time.Minute
 	}
-	return &TagService{db: db, rdb: rdb, cacheTTL: cacheTTL}
+	return &TagService{db: db, graph: graph, rdb: rdb, cacheTTL: cacheTTL}
 }
 
 // List returns tags ordered by usage count (most popular first).
@@ -141,6 +144,7 @@ func (s *TagService) FindOrCreateByNames(names []string) ([]model.Tag, error) {
 	// Invalidate caches after mutation since usage counts changed.
 	if err == nil {
 		s.invalidateTagCaches()
+		_ = s.syncTagsToGraph(tags)
 	}
 
 	return tags, err
@@ -190,6 +194,33 @@ func (s *TagService) Trending(limit int) ([]model.Tag, error) {
 
 	s.setTagsCache(cacheKey, tags)
 	return tags, nil
+}
+
+func (s *TagService) syncTagsToGraph(tags []model.Tag) error {
+	if s.graph == nil || len(tags) == 0 {
+		return nil
+	}
+
+	payload := make([]map[string]any, 0, len(tags))
+	for _, t := range tags {
+		payload = append(payload, map[string]any{
+			"id":         t.ID.String(),
+			"name":       t.Name,
+			"usageCount": t.UsageCount,
+		})
+	}
+
+	_, err := s.graph.ExecuteWrite(context.Background(), func(tx neo4j.ManagedTransaction) (any, error) {
+		_, err := tx.Run(context.Background(), `
+			UNWIND $tags AS tag
+			MERGE (t:Tag {id: tag.id})
+			SET t.name = tag.name,
+			    t.usageCount = tag.usageCount
+		`, map[string]any{"tags": payload})
+		return nil, err
+	})
+
+	return err
 }
 
 // --- Redis cache helpers ---

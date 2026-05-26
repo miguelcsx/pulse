@@ -16,12 +16,14 @@ import (
 )
 
 type Server struct {
-	cfg     *config.Config
-	db      *gorm.DB
-	redis   *redis.Client
-	storage store.Storage
-	router  *gin.Engine
-	hub     *ws.Hub
+	cfg      *config.Config
+	db       *gorm.DB
+	graph    *store.GraphStore
+	redis    *redis.Client
+	storage  store.Storage
+	router   *gin.Engine
+	hub      *ws.Hub
+	embedder service.Embedder
 
 	authService     *service.AuthService
 	userService     *service.UserService
@@ -36,30 +38,39 @@ type Server struct {
 	mediaService    *service.MediaService
 }
 
-func NewServer(cfg *config.Config, db *gorm.DB, rdb *redis.Client, storage store.Storage) *Server {
+func NewServer(cfg *config.Config, db *gorm.DB, graph *store.GraphStore, rdb *redis.Client, storage store.Storage) *Server {
 	hub := ws.NewHub()
 	go hub.Run()
 
-	tagSvc := service.NewTagService(db, rdb, cfg.TagCacheTTL)
+	tagSvc := service.NewTagService(db, graph, rdb, cfg.TagCacheTTL)
 	mediaSvc := service.NewMediaService(db, storage)
 	roomSvc := service.NewRoomService(db, cfg)
 
-	s := &Server{
-		cfg:     cfg,
-		db:      db,
-		redis:   rdb,
-		storage: storage,
-		hub:     hub,
+	var embedder service.Embedder
+	if cfg.OllamaBaseURL != "" && cfg.OllamaModel != "" {
+		embedder = service.NewOllamaEmbedder(cfg.OllamaBaseURL, cfg.OllamaModel, cfg.EmbeddingDimensions)
+	} else {
+		embedder = service.NewHashEmbedder(cfg.EmbeddingDimensions)
+	}
 
-		authService:     service.NewAuthService(db, rdb, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.LoginMaxAttempts, cfg.LoginLockoutDuration),
+	s := &Server{
+		cfg:      cfg,
+		db:       db,
+		graph:    graph,
+		redis:    rdb,
+		storage:  storage,
+		hub:      hub,
+		embedder: embedder,
+
+		authService:     service.NewAuthService(db, graph, rdb, cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL, cfg.LoginMaxAttempts, cfg.LoginLockoutDuration),
 		userService:     service.NewUserService(db),
 		tagService:      tagSvc,
-		contentService:  service.NewContentService(db, storage, tagSvc, mediaSvc, roomSvc),
+		contentService:  service.NewContentService(db, graph, storage, tagSvc, mediaSvc, roomSvc, embedder),
 		feedService:     service.NewFeedService(db, roomSvc, cfg),
-		affinityService: service.NewAffinityService(db),
-		followService:   service.NewFollowService(db),
+		affinityService: service.NewAffinityService(graph, cfg),
+		followService:   service.NewFollowService(db, graph),
 		roomService:     roomSvc,
-		pathService:     service.NewPathService(db),
+		pathService:     service.NewPathService(db, graph),
 		eventService:    service.NewEventService(db, cfg),
 		mediaService:    mediaSvc,
 	}
@@ -182,6 +193,7 @@ func (s *Server) setupRoutes() {
 
 			// Rooms
 			protected.GET("/rooms", s.ListRooms)
+			protected.GET("/rooms/:id/content", s.GetRoomContent)
 			protected.POST("/rooms/:id/enter", s.EnterRoom)
 			protected.POST("/rooms/:id/leave", s.LeaveRoom)
 
