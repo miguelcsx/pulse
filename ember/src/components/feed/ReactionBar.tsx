@@ -4,12 +4,35 @@ import { REACTION_LABELS } from "@pulse/drift/types";
 import { reactToContent, removeReaction } from "../../api/content";
 import { trackReaction } from "../../api/events";
 
-const REACTION_CONFIG: Record<ReactionKind, { label: string; emoji: string; colorVar: string }> = {
-  gave_me_energy: { label: "Energy", emoji: "\u26A1", colorVar: "--color-accent-energy" },
-  calmed_me: { label: "Calm", emoji: "\uD83C\uDF0A", colorVar: "--color-accent-calm" },
-  on_repeat: { label: "Repeat", emoji: "\uD83D\uDD01", colorVar: "--color-accent-repeat" },
-  surprised_me: { label: "Surprised", emoji: "\u2728", colorVar: "--color-accent-surprise" },
-  my_aesthetic: { label: "Aesthetic", emoji: "\u2B50", colorVar: "--color-accent-aesthetic" },
+const REACTION_CONFIG: Record<
+  ReactionKind,
+  { label: string; emoji: string; colorVar: string }
+> = {
+  gave_me_energy: {
+    label: "Energy",
+    emoji: "⚡",
+    colorVar: "--color-accent-energy",
+  },
+  calmed_me: {
+    label: "Calm",
+    emoji: "🌊",
+    colorVar: "--color-accent-calm",
+  },
+  on_repeat: {
+    label: "Repeat",
+    emoji: "🔁",
+    colorVar: "--color-accent-repeat",
+  },
+  surprised_me: {
+    label: "Surprise",
+    emoji: "✨",
+    colorVar: "--color-accent-surprise",
+  },
+  my_aesthetic: {
+    label: "Aesthetic",
+    emoji: "⭐",
+    colorVar: "--color-accent-aesthetic",
+  },
 };
 
 const REACTION_KINDS = Object.keys(REACTION_LABELS) as ReactionKind[];
@@ -79,22 +102,21 @@ export default function ReactionBar({ contentId, initialCounts }: Props) {
             title={REACTION_LABELS[kind]}
             onClick={() => toggleReaction(kind)}
             disabled={busyKind !== null}
-            className={`text-xs px-2 py-1 rounded-full border transition-all active:scale-95 ${
+            className={`text-xs px-2.5 py-1.5 rounded-full transition-all active:scale-95 ${
               isActive
-                ? "text-white"
-                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-emphasis)]"
+                ? "text-white shadow-sm"
+                : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
             }`}
             style={
               isActive
                 ? {
                     backgroundColor: `var(${config.colorVar})`,
-                    borderColor: `var(${config.colorVar})`,
                   }
                 : undefined
             }
           >
-            {config.emoji} {config.label}
-            {count > 0 && <span className="ml-1">{count}</span>}
+            {config.emoji}
+            {count > 0 && <span className="ml-1 tabular-nums">{count}</span>}
           </button>
         );
       })}

@@ -61,11 +61,11 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
   const user = bridge.recommended_user;
 
   return (
-    <article className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+    <article className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
       <div className="flex items-start gap-3">
         <Link
           to={`/profile/${user.id}`}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-sm font-semibold text-white"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-active)] text-sm font-semibold text-[var(--color-text-secondary)]"
         >
           {user.display_name?.[0] || user.handle?.[0] || "?"}
         </Link>
@@ -73,44 +73,48 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               to={`/profile/${user.id}`}
-              className="truncate text-sm font-semibold hover:text-[var(--color-primary)]"
+              className="truncate text-sm font-semibold hover:text-[var(--color-accent)] transition-colors"
             >
               {user.display_name || user.handle}
             </Link>
-            <span className="rounded-full bg-[var(--color-tag-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-tag-text)]">
+            <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]">
               {bridgeLabels[bridge.bridge_type]}
             </span>
-            <span className="text-[11px] text-[var(--color-text-muted)]">
+            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)]">
               {Math.round(bridge.confidence * 100)}%
             </span>
           </div>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
             @{user.handle}
           </p>
-          <p className="mt-3 text-sm leading-relaxed">{bridge.reason}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+            {bridge.reason}
+          </p>
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button size="sm" onClick={handleAsk} loading={busy}>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="accent" onClick={handleAsk} loading={busy}>
           {status === "asked" ? "Asked" : "Ask"}
         </Button>
         <Link
           to={`/profile/${user.id}`}
-          className="inline-flex items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--color-surface-hover)]"
+          className="inline-flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-3 py-1.5 text-[13px] font-medium hover:bg-[var(--color-surface-hover)] transition-colors"
         >
-          Follow journey
+          View profile
         </Link>
-        {signalLabels.map((signal) => (
-          <button
-            key={signal.kind}
-            type="button"
-            onClick={() => handleSignal(signal.kind)}
-            className="rounded-lg px-2.5 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
-          >
-            {signal.label}
-          </button>
-        ))}
+        <div className="ml-auto flex gap-1">
+          {signalLabels.map((signal) => (
+            <button
+              key={signal.kind}
+              type="button"
+              onClick={() => handleSignal(signal.kind)}
+              className="rounded-full px-2 py-1 text-[11px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors"
+            >
+              {signal.label}
+            </button>
+          ))}
+        </div>
       </div>
     </article>
   );

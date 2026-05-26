@@ -11,7 +11,13 @@ import MediaFallback from "../components/ui/MediaFallback";
 import { useVideoAutoplay } from "../hooks/useVideoAutoplay";
 import type { Content, Path } from "@pulse/drift/types";
 
-function PathVideoPreview({ content, className }: { content: Content; className: string }) {
+function PathVideoPreview({
+  content,
+  className,
+}: {
+  content: Content;
+  className: string;
+}) {
   const videoRef = useVideoAutoplay({ threshold: 0.5 });
 
   return (
@@ -45,8 +51,8 @@ function renderContentPreview(content: Content, className: string) {
       return <PathVideoPreview content={content} className={className} />;
     case "text":
       return (
-        <div className="p-3 bg-[var(--color-surface-hover)] rounded border border-[var(--color-border)]">
-          <p className="text-sm line-clamp-5 whitespace-pre-wrap">
+        <div className="p-4 bg-[var(--color-surface)] rounded-[var(--radius-sm)]">
+          <p className="text-sm line-clamp-5 whitespace-pre-wrap text-[var(--color-text-secondary)]">
             {content.body}
           </p>
         </div>
@@ -114,28 +120,35 @@ export default function PathView() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-16">
         <Spinner size="lg" />
       </div>
     );
   }
 
   if (!path) {
-    return <p className="text-[var(--color-text-muted)]">Path not found</p>;
+    return (
+      <p className="text-[var(--color-text-muted)] text-center py-16">
+        Path not found
+      </p>
+    );
   }
 
   const isOwner = user?.id === path.creator_id;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-4">
       <button
-        onClick={() => navigate("/discover")}
-        className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors pt-2"
       >
-        &larr; Back to Discover
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
       </button>
 
-      <div>
+      <section>
         <h2 className="text-xl font-semibold">{path.title}</h2>
         {path.description && (
           <p className="text-sm text-[var(--color-text-muted)] mt-1">
@@ -144,41 +157,43 @@ export default function PathView() {
         )}
         <div className="flex items-center gap-4 mt-2 text-xs text-[var(--color-text-muted)]">
           <span>by {path.creator?.display_name}</span>
-          <span>{path.follower_count} followers</span>
+          <span className="tabular-nums">{path.follower_count} followers</span>
         </div>
-        {!isOwner &&
-          (path.is_following ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="mt-3"
-              onClick={handleUnfollow}
-            >
-              Unfollow Path
-            </Button>
-          ) : (
-            <Button size="sm" className="mt-3" onClick={handleFollow}>
-              Follow Path
-            </Button>
-          ))}
-      </div>
+        {!isOwner && (
+          <div className="mt-3">
+            {path.is_following ? (
+              <Button size="sm" variant="secondary" onClick={handleUnfollow}>
+                Unfollow
+              </Button>
+            ) : (
+              <Button size="sm" variant="accent" onClick={handleFollow}>
+                Follow path
+              </Button>
+            )}
+          </div>
+        )}
+      </section>
 
-      <div className="space-y-3">
+      <section className="space-y-3">
         {path.items?.length === 0 ? (
-          <p className="text-[var(--color-text-muted)] text-sm">
+          <p className="text-[var(--color-text-muted)] text-sm text-center py-8">
             No items in this path yet.
           </p>
         ) : (
           path.items?.map((item, i) => (
             <div
               key={item.id}
-              className="bg-[var(--color-surface)] rounded-lg overflow-hidden border border-[var(--color-border)]"
+              className="rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] overflow-hidden"
             >
               <div className="flex items-center gap-3 p-3">
-                <span className="text-xs font-mono text-[var(--color-text-muted)]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-surface)] text-xs font-medium text-[var(--color-text-muted)] tabular-nums">
                   {i + 1}
                 </span>
-                {item.note && <p className="text-sm">{item.note}</p>}
+                {item.note && (
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    {item.note}
+                  </p>
+                )}
               </div>
               {item.content &&
                 renderContentPreview(
@@ -188,7 +203,7 @@ export default function PathView() {
             </div>
           ))
         )}
-      </div>
+      </section>
     </div>
   );
 }

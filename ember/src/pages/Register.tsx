@@ -4,13 +4,15 @@ export default function Register() {
   return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--color-bg)] p-4">
       <div className="w-full max-w-sm">
-        <h1 className="text-3xl font-bold text-center mb-2 bg-gradient-to-r from-[var(--color-primary)] to-pink-500 bg-clip-text text-transparent">
-          Pulse
-        </h1>
-        <p className="text-center text-sm text-[var(--color-text-muted)] mb-8">
-          Find the human who lived your question
-        </p>
-        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-8">
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-semibold tracking-tight text-[var(--color-text)]">
+            Pulse
+          </h1>
+          <p className="mt-1.5 text-sm text-[var(--color-text-muted)]">
+            Find the human who lived your question
+          </p>
+        </div>
+        <div className="rounded-[var(--radius-lg)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-7">
           <RegisterForm />
         </div>
       </div>

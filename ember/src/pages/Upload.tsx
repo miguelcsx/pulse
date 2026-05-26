@@ -13,10 +13,10 @@ import Button from "../components/ui/Button";
 import type { ContentType, MediaAsset } from "@pulse/drift/types";
 
 const contentTypes: { value: ContentType; label: string }[] = [
-  { value: "image", label: "Image" },
+  { value: "image", label: "Photo" },
   { value: "video", label: "Video" },
-  { value: "short_video", label: "Short Video" },
-  { value: "text", label: "Text Post" },
+  { value: "short_video", label: "Short" },
+  { value: "text", label: "Text" },
 ];
 
 async function waitForReady(
@@ -41,7 +41,7 @@ async function waitForReady(
 }
 
 export default function Upload() {
-  usePageTitle("Create Post");
+  usePageTitle("New post");
   const navigate = useNavigate();
   const addToast = useUiStore((s) => s.addToast);
   const [contentType, setContentType] = useState<ContentType>("image");
@@ -100,21 +100,22 @@ export default function Upload() {
       } else {
         if (!file) return;
 
-        setPipelineStatus("Initializing upload session...");
+        setPipelineStatus("Initializing...");
         const { asset, upload } = await initMediaUpload(contentType, file);
 
-        setPipelineStatus("Uploading media...");
+        setPipelineStatus("Uploading...");
         await uploadMediaBinary(upload.url, file, setUploadProgress);
 
-        setPipelineStatus("Processing media...");
+        setPipelineStatus("Processing...");
         const readyAsset = await waitForReady(asset.id);
         await uploadContent(contentType, null, body, tags, readyAsset.id);
       }
 
       addToast("Posted!", "success");
-      navigate("/");
+      navigate("/moments");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to post";
+      const message =
+        error instanceof Error ? error.message : "Failed to post";
       addToast(message, "error");
     } finally {
       setLoading(false);
@@ -124,9 +125,12 @@ export default function Upload() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-lg font-semibold">Create Post</h2>
+    <form onSubmit={handleSubmit} className="space-y-5 pb-4">
+      <h2 className="text-[22px] font-semibold tracking-tight pt-2">
+        New post
+      </h2>
 
+      {/* Type selector */}
       <div className="flex gap-2">
         {contentTypes.map((ct) => (
           <button
@@ -136,10 +140,10 @@ export default function Upload() {
               setContentType(ct.value);
               if (ct.value === "text") setFile(null);
             }}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+            className={`text-[13px] font-medium px-4 py-2 rounded-full transition-all ${
               contentType === ct.value
-                ? "bg-[var(--color-primary)] border-[var(--color-primary)] text-white"
-                : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-emphasis)]"
+                ? "bg-[var(--color-primary)] text-[var(--color-bg)] shadow-sm"
+                : "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             }`}
           >
             {ct.label}
@@ -147,27 +151,37 @@ export default function Upload() {
         ))}
       </div>
 
+      {/* File drop zone */}
       {needsFile && (
-        <label className="block border-2 border-dashed border-[var(--color-border)] rounded-lg p-8 text-center cursor-pointer hover:border-[var(--color-primary)] transition-colors">
+        <label className="block rounded-[var(--radius-lg)] border-2 border-dashed border-[var(--color-border)] p-8 text-center cursor-pointer hover:border-[var(--color-accent)] transition-colors">
           {preview ? (
             contentType === "image" ? (
               <img
                 src={preview}
                 alt="Preview"
-                className="max-h-64 mx-auto rounded"
+                className="max-h-64 mx-auto rounded-[var(--radius-sm)]"
               />
             ) : (
               <video
                 src={preview}
-                className="max-h-64 mx-auto rounded"
+                className="max-h-64 mx-auto rounded-[var(--radius-sm)]"
                 controls
               />
             )
           ) : (
-            <div className="text-[var(--color-text-muted)]">
-              <p>Click to select a file</p>
-              <p className="text-xs mt-1">
-                {contentType === "image" ? "JPG, PNG, WebP" : "MP4, MOV, WebM"}{" "}
+            <div className="text-[var(--color-text-muted)] space-y-1">
+              <div className="mx-auto w-10 h-10 rounded-full bg-[var(--color-surface)] flex items-center justify-center mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium">Tap to select</p>
+              <p className="text-xs">
+                {contentType === "image"
+                  ? "JPG, PNG, WebP"
+                  : "MP4, MOV, WebM"}{" "}
                 up to 10MB
               </p>
             </div>
@@ -181,8 +195,9 @@ export default function Upload() {
         </label>
       )}
 
+      {/* Caption */}
       <div>
-        <label className="block text-sm font-medium mb-1">
+        <label className="block text-[13px] font-medium text-[var(--color-text-secondary)] mb-1.5">
           {contentType === "text" ? "What's on your mind?" : "Caption"}
         </label>
         <textarea
@@ -194,23 +209,24 @@ export default function Upload() {
               : "What's the story behind this?"
           }
           rows={contentType === "text" ? 5 : 2}
-          className="w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]"
+          className="w-full px-3 py-2.5 rounded-[var(--radius-sm)] bg-[var(--color-bg)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-colors"
         />
       </div>
 
+      {/* Tags */}
       <div>
-        <label className="block text-sm font-medium mb-1">Tags</label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleTagKeyDown}
-            onBlur={addTag}
-            placeholder="Type a tag and press Enter..."
-            className="flex-1 px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]"
-          />
-        </div>
+        <label className="block text-[13px] font-medium text-[var(--color-text-secondary)] mb-1.5">
+          Tags
+        </label>
+        <input
+          type="text"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyDown={handleTagKeyDown}
+          onBlur={addTag}
+          placeholder="Type a tag and press Enter..."
+          className="w-full px-3 py-2.5 rounded-[var(--radius-sm)] bg-[var(--color-bg)] border border-[var(--color-border)] text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent transition-colors"
+        />
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {tags.map((tag) => (
@@ -218,7 +234,7 @@ export default function Upload() {
                 key={tag}
                 type="button"
                 onClick={() => removeTag(tag)}
-                className="text-xs px-2 py-1 rounded-full bg-[var(--color-primary)] text-white hover:opacity-90"
+                className="text-xs px-2.5 py-1 rounded-full bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
               >
                 #{tag} &times;
               </button>
@@ -227,15 +243,16 @@ export default function Upload() {
         )}
       </div>
 
+      {/* Progress */}
       {loading && pipelineStatus && (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div className="rounded-[var(--radius-sm)] bg-[var(--color-surface)] p-3">
           <p className="text-xs text-[var(--color-text-muted)]">
             {pipelineStatus}
           </p>
           {uploadProgress > 0 && uploadProgress < 100 && (
-            <div className="mt-2 h-2 w-full rounded-full bg-[var(--color-surface-hover)]">
+            <div className="mt-2 h-1 w-full rounded-full bg-[var(--color-surface-hover)]">
               <div
-                className="h-2 rounded-full bg-[var(--color-primary)] transition-all"
+                className="h-1 rounded-full bg-[var(--color-accent)] transition-all"
                 style={{ width: `${uploadProgress}%` }}
               />
             </div>
@@ -247,6 +264,7 @@ export default function Upload() {
         type="submit"
         loading={loading}
         disabled={needsFile ? !file : !body.trim()}
+        className="w-full"
       >
         Post
       </Button>

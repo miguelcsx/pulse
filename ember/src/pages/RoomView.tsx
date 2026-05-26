@@ -96,59 +96,65 @@ export default function RoomView() {
   }, [joined, id, wsLeaveRoom]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-4">
       <button
-        onClick={() => navigate("/discover")}
-        className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors pt-2"
       >
-        &larr; Back to Discover
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
       </button>
 
-      <div className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
-        <h2 className="text-lg font-semibold mb-4">Room</h2>
+      <section className="rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-5">
+        <h2 className="text-xl font-semibold mb-3">Room</h2>
         <PresenceIndicator count={presence} />
-        {error ? (
+        {error && (
           <p className="mt-3 text-sm text-[var(--color-error)]">{error}</p>
-        ) : null}
+        )}
 
-        <div className="mt-6">
+        <div className="mt-5">
           {joined ? (
-            <div className="space-y-4">
-              <p className="text-sm text-[var(--color-success)]">
-                You're in this room
+            <div className="space-y-3">
+              <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
+                <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" />
+                You&rsquo;re in this room
               </p>
               <Button variant="danger" onClick={handleLeave} loading={loading}>
-                Leave Room
+                Leave room
               </Button>
             </div>
           ) : (
-            <Button onClick={handleEnter} loading={loading}>
-              Enter Room
+            <Button variant="accent" onClick={handleEnter} loading={loading}>
+              Enter room
             </Button>
           )}
         </div>
-      </div>
+      </section>
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Room feed</h3>
+          <h3 className="text-[17px] font-semibold">Room feed</h3>
           {roomContent.length > 0 && (
-            <span className="text-xs text-[var(--color-text-muted)]">
+            <span className="text-xs text-[var(--color-text-muted)] tabular-nums">
               {roomContent.length} posts
             </span>
           )}
         </div>
 
         {contentLoading ? (
-          <Spinner />
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
         ) : contentError ? (
           <p className="text-sm text-[var(--color-error)]">{contentError}</p>
         ) : roomContent.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">
+          <p className="text-sm text-[var(--color-text-muted)] text-center py-8">
             No content in this room yet.
           </p>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4">
             {roomContent.map((item) => (
               <FeedCard
                 key={item.id}

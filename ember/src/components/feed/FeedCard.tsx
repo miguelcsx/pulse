@@ -45,8 +45,8 @@ function renderPreview(content: FeedItem) {
       return <FeedVideoPreview content={content} />;
     case "text":
       return (
-        <div className="w-full min-h-[45dvh] p-4 text-left bg-gradient-to-br from-[var(--color-primary-subtle)] to-[var(--color-surface)]">
-          <p className="text-sm whitespace-pre-wrap line-clamp-6">
+        <div className="w-full min-h-[40dvh] p-5 flex items-center bg-[var(--color-surface)]">
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap line-clamp-8">
             {content.body}
           </p>
         </div>
@@ -68,15 +68,19 @@ export default function FeedCard({ content, onClick }: Props) {
     <article
       ref={dwellRef}
       data-content-id={content.id}
-      className="snap-start glass premium-card rounded-none sm:rounded-xl overflow-hidden border-y sm:border border-[var(--color-border)] min-h-[calc(100dvh-9.5rem)] sm:min-h-0"
+      className="snap-start bg-[var(--color-bg-elevated)] rounded-none sm:rounded-[var(--radius-lg)] overflow-hidden border-y sm:border border-[var(--color-border)] min-h-[calc(100dvh-9.5rem)] sm:min-h-0"
     >
-      <div className="flex items-center gap-3 p-3">
-        <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-sm font-medium text-white">
-          {content.creator?.display_name?.[0] || "?"}
-        </div>
+      {/* Creator row */}
+      <div className="flex items-center gap-2.5 px-4 py-3">
         <Link
           to={`/profile/${content.creator_id}`}
-          className="text-sm font-medium hover:text-[var(--color-primary)]"
+          className="w-8 h-8 rounded-full bg-[var(--color-surface-active)] flex items-center justify-center text-xs font-semibold text-[var(--color-text-secondary)]"
+        >
+          {content.creator?.display_name?.[0] || "?"}
+        </Link>
+        <Link
+          to={`/profile/${content.creator_id}`}
+          className="text-[13px] font-medium hover:text-[var(--color-accent)] transition-colors"
         >
           {content.creator?.display_name || "Unknown"}
         </Link>
@@ -88,6 +92,7 @@ export default function FeedCard({ content, onClick }: Props) {
         )}
       </div>
 
+      {/* Media */}
       <button
         type="button"
         onClick={handleClick}
@@ -96,14 +101,16 @@ export default function FeedCard({ content, onClick }: Props) {
         {renderPreview(content)}
       </button>
 
+      {/* Caption */}
       {content.content_type !== "text" && content.body && (
-        <div className="p-3 pb-0">
-          <p className="text-sm whitespace-pre-wrap">{content.body}</p>
+        <div className="px-4 pt-3">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{content.body}</p>
         </div>
       )}
 
+      {/* Tags */}
       {content.tags && content.tags.length > 0 && (
-        <div className="px-3 pb-0 pt-3 flex flex-wrap gap-1.5">
+        <div className="px-4 pt-2.5 flex flex-wrap gap-1.5">
           {content.tags.map((tag) => (
             <span
               key={tag.id}
@@ -115,7 +122,8 @@ export default function FeedCard({ content, onClick }: Props) {
         </div>
       )}
 
-      <div className="px-3 pb-3">
+      {/* Reactions */}
+      <div className="px-4 pb-4">
         <ReactionBar contentId={content.id} initialCounts={content.reactions} />
       </div>
     </article>

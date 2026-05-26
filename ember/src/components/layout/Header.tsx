@@ -3,15 +3,16 @@ import FeedContextIndicator from "../feed/FeedContextIndicator";
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-      <Link to="/" className="text-lg font-bold bg-gradient-to-r from-[var(--color-primary)] to-pink-500 bg-clip-text text-transparent">
+    <header className="sticky top-0 z-40 flex items-center justify-between bg-[var(--color-bg)]/80 backdrop-blur-xl px-4 py-3 border-b border-[var(--color-border)]">
+      <Link to="/" className="text-lg font-semibold tracking-tight text-[var(--color-text)]">
         Pulse
       </Link>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <FeedContextIndicator />
         <Link
           to="/settings"
-          className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] transition-colors"
+          className="rounded-full p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors"
+          aria-label="Settings"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -19,7 +20,7 @@ export default function Header() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeLinejoin="round"
           >

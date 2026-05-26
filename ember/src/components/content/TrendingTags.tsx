@@ -37,9 +37,11 @@ export default function TrendingTags({ limit = 10 }: Props) {
 
   if (error) {
     return (
-      <section className="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
+      <section className="rounded-[var(--radius-sm)] bg-[var(--color-surface)] p-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-[var(--color-error)]">Could not load trending tags</p>
+          <p className="text-xs text-[var(--color-error)]">
+            Could not load trending tags
+          </p>
           <button
             onClick={handleRetry}
             className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
@@ -56,13 +58,15 @@ export default function TrendingTags({ limit = 10 }: Props) {
   }
 
   return (
-    <section className="bg-[var(--color-surface)] rounded-lg p-4 border border-[var(--color-border)]">
-      <h3 className="text-sm font-semibold mb-2">Trending tags</h3>
+    <section className="rounded-[var(--radius-sm)] bg-[var(--color-surface)] p-3">
+      <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-2">
+        Trending
+      </h3>
       <div className="flex flex-wrap gap-1.5">
         {tags.map((tag) => (
           <span
             key={tag.id}
-            className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-tag-bg)] text-[var(--color-tag-text)]"
+            className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg)] text-[var(--color-text-muted)]"
           >
             #{tag.name}
           </span>

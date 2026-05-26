@@ -8,7 +8,7 @@ import { usePageTitle } from "../hooks/usePageTitle";
 import { useUiStore } from "../store/uiStore";
 
 export default function Discover() {
-  usePageTitle("Affinity Map");
+  usePageTitle("Discover");
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const addToast = useUiStore((s) => s.addToast);
@@ -19,7 +19,7 @@ export default function Discover() {
       .then((res) => {
         if (!cancelled) setData(res);
       })
-      .catch(() => addToast("Failed to load affinity map", "error"))
+      .catch(() => addToast("Failed to load", "error"))
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
@@ -30,7 +30,7 @@ export default function Discover() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-16">
         <Spinner size="lg" />
       </div>
     );
@@ -40,75 +40,79 @@ export default function Discover() {
   const sessions = data?.help_sessions ?? [];
 
   return (
-    <div className="space-y-7">
-      <section>
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-          Affinity map
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold">
-          Your current advice graph
-        </h1>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-          Bridges, live contexts, and your trust profile are built from asks and
-          help signals, not follower-count ranking.
+    <div className="space-y-8 pb-4">
+      {/* Header */}
+      <section className="pt-4">
+        <h1 className="text-[28px] font-semibold tracking-tight">Discover</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          Your network built from asks and help, not followers.
         </p>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-[var(--color-border)] p-4">
-          <p className="text-2xl font-semibold">{bridges.length}</p>
-          <p className="text-xs text-[var(--color-text-muted)]">active bridges</p>
-        </div>
-        <div className="rounded-lg border border-[var(--color-border)] p-4">
-          <p className="text-2xl font-semibold">{sessions.length}</p>
-          <p className="text-xs text-[var(--color-text-muted)]">live rooms</p>
-        </div>
-        <div className="rounded-lg border border-[var(--color-border)] p-4">
-          <p className="text-2xl font-semibold">
-            {data?.trust_profile?.helped_count ?? 0}
-          </p>
-          <p className="text-xs text-[var(--color-text-muted)]">people helped</p>
-        </div>
+      {/* Stats */}
+      <section className="grid grid-cols-3 gap-3">
+        {[
+          { value: bridges.length, label: "Bridges" },
+          { value: sessions.length, label: "Live rooms" },
+          { value: data?.trust_profile?.helped_count ?? 0, label: "Helped" },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-4 text-center"
+          >
+            <p className="text-2xl font-semibold tabular-nums">{stat.value}</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+              {stat.label}
+            </p>
+          </div>
+        ))}
       </section>
 
+      {/* Bridges */}
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Human bridges</h2>
+        <h2 className="text-[17px] font-semibold">Bridges</h2>
         {bridges.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-[var(--color-border)] p-5">
-            <p className="text-sm text-[var(--color-text-muted)]">
-              No bridges yet. Start with an ask on Today.
+          <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center">
+            <p className="text-sm text-[var(--color-text-muted)] mb-3">
+              No bridges yet. Start by asking a question.
             </p>
             <Link
               to="/"
-              className="mt-3 inline-flex rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white"
+              className="inline-flex rounded-[var(--radius-sm)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] transition-colors"
             >
-              Create ask
+              Ask something
             </Link>
           </div>
         ) : (
-          bridges.map((bridge) => <BridgeCard key={bridge.id} bridge={bridge} />)
+          bridges.map((bridge) => (
+            <BridgeCard key={bridge.id} bridge={bridge} />
+          ))
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Live contexts</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {sessions.map((session) => (
-            <article
-              key={session.id}
-              className="rounded-lg border border-[var(--color-border)] p-4"
-            >
-              <p className="text-sm font-semibold">{session.title}</p>
-              <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                {session.description}
-              </p>
-              <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-                {session.member_count} inside
-              </p>
-            </article>
-          ))}
-        </div>
-      </section>
+      {/* Live rooms */}
+      {sessions.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-[17px] font-semibold">Live rooms</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {sessions.map((session) => (
+              <article
+                key={session.id}
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4"
+              >
+                <p className="text-sm font-medium">{session.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                  {session.description}
+                </p>
+                <div className="mt-3 flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {session.member_count} inside
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

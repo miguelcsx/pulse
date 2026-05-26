@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { getUserProfile } from "../api/social";
 import { getUserContent } from "../api/content";
 import { trackView } from "../api/events";
@@ -21,14 +21,15 @@ function Avatar({
   fallbackChar: string;
   size?: "md" | "lg";
 }) {
-  const sizeClasses = size === "lg" ? "w-16 h-16 text-xl" : "w-10 h-10 text-sm";
+  const sizeClasses =
+    size === "lg" ? "w-20 h-20 text-2xl" : "w-10 h-10 text-sm";
 
   if (src) {
     return (
       <img
         src={src}
         alt=""
-        className={`${sizeClasses} rounded-full object-cover bg-[var(--color-primary)]`}
+        className={`${sizeClasses} rounded-full object-cover bg-[var(--color-surface-active)]`}
         onError={(e) => {
           const target = e.currentTarget;
           target.style.display = "none";
@@ -40,7 +41,7 @@ function Avatar({
 
   return (
     <div
-      className={`${sizeClasses} rounded-full bg-[var(--color-primary)] flex items-center justify-center font-medium text-white`}
+      className={`${sizeClasses} rounded-full bg-[var(--color-surface-active)] flex items-center justify-center font-medium text-[var(--color-text-secondary)]`}
     >
       {fallbackChar}
     </div>
@@ -58,7 +59,7 @@ function ProfileContentPreview({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] text-left hover:scale-[1.02] transition-transform"
+      className="rounded-[var(--radius-sm)] overflow-hidden bg-[var(--color-surface)] text-left hover:opacity-90 transition-opacity"
     >
       {content.content_type === "image" && (
         <MediaFallback
@@ -82,8 +83,8 @@ function ProfileContentPreview({
         />
       )}
       {content.content_type === "text" && (
-        <div className="aspect-square p-3 bg-gradient-to-br from-[var(--color-primary-subtle)] to-[var(--color-surface)]">
-          <p className="text-sm line-clamp-8 whitespace-pre-wrap">
+        <div className="aspect-square p-3 bg-[var(--color-surface)] flex items-center">
+          <p className="text-xs line-clamp-6 whitespace-pre-wrap text-[var(--color-text-secondary)]">
             {content.body}
           </p>
         </div>
@@ -97,7 +98,7 @@ export default function Profile() {
   const currentUser = useAuthStore((s) => s.user);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   usePageTitle(
-    profile?.display_name ? `${profile.display_name}'s Profile` : "Profile",
+    profile?.display_name ? `${profile.display_name}` : "Profile",
   );
   const [content, setContent] = useState<Content[]>([]);
   const [selected, setSelected] = useState<Content | null>(null);
@@ -143,7 +144,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-16">
         <Spinner size="lg" />
       </div>
     );
@@ -151,11 +152,11 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-16">
         <p className="text-[var(--color-error)]">{error}</p>
         <button
           onClick={handleRetry}
-          className="mt-4 px-4 py-2 rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-sm font-medium transition-colors"
+          className="mt-4 px-4 py-2.5 rounded-[var(--radius-sm)] bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] text-sm font-medium transition-colors"
         >
           Retry
         </button>
@@ -164,100 +165,113 @@ export default function Profile() {
   }
 
   if (!profile) {
-    return <p className="text-[var(--color-text-muted)]">User not found</p>;
+    return (
+      <p className="py-16 text-center text-[var(--color-text-muted)]">
+        User not found
+      </p>
+    );
   }
 
   const isMe = currentUser?.id === profile.id;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
-        <div className="flex items-center gap-4">
+    <div className="space-y-6 pb-4">
+      {/* Profile header */}
+      <section className="pt-4 text-center">
+        <div className="flex justify-center mb-3">
           <Avatar
             src={profile.avatar_url}
             fallbackChar={profile.display_name?.[0] || "?"}
             size="lg"
           />
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold">{profile.display_name}</h2>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              @{profile.handle}
+        </div>
+        <h2 className="text-xl font-semibold">{profile.display_name}</h2>
+        <p className="text-sm text-[var(--color-text-muted)]">
+          @{profile.handle}
+        </p>
+        {profile.bio && (
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)] max-w-xs mx-auto">
+            {profile.bio}
+          </p>
+        )}
+        {profile.location && (
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            {profile.location}
+          </p>
+        )}
+
+        {/* Stats */}
+        <div className="flex justify-center gap-8 mt-4">
+          <div className="text-center">
+            <p className="text-lg font-semibold tabular-nums">
+              {profile.content_count}
             </p>
+            <p className="text-xs text-[var(--color-text-muted)]">moments</p>
           </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold tabular-nums">
+              {profile.trust_profile?.helped_count ?? 0}
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">helped</p>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold tabular-nums">
+              {(profile.trust_profile?.response_quality ?? 0).toFixed(1)}
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">quality</p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-4 flex justify-center gap-3">
           {!isMe && (
             <FollowButton
               userId={profile.id}
               initialFollowing={profile.is_following}
             />
           )}
+          {isMe && (
+            <Link
+              to="/settings"
+              className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium hover:bg-[var(--color-surface-hover)] transition-colors"
+            >
+              Edit profile
+            </Link>
+          )}
         </div>
-
-        {profile.bio && <p className="text-sm mt-4">{profile.bio}</p>}
-        {profile.location && (
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            {profile.location}
-          </p>
-        )}
-
-        <div className="flex gap-6 mt-4 text-sm">
-          <div>
-            <span className="font-medium">{profile.content_count}</span>
-            <span className="text-[var(--color-text-muted)] ml-1">moments</span>
-          </div>
-          <div>
-            <span className="font-medium">
-              {profile.trust_profile?.helped_count ?? 0}
-            </span>
-            <span className="text-[var(--color-text-muted)] ml-1">helped</span>
-          </div>
-          <div>
-            <span className="font-medium">
-              {(profile.trust_profile?.response_quality ?? 0).toFixed(1)}
-            </span>
-            <span className="text-[var(--color-text-muted)] ml-1">
-              quality
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <section className="rounded-lg border border-[var(--color-border)] p-5">
-        <h3 className="text-sm font-semibold">Trust profile</h3>
-        {profile.trust_profile ? (
-          <div className="mt-3 space-y-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-                Topics
-              </p>
-              <p className="mt-1 text-sm">{profile.trust_profile.topics || "No topics yet."}</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
-                Lived experience
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">
-                {profile.trust_profile.lived_experience || "No proof moments yet."}
-              </p>
-            </div>
-            <p className="text-xs text-[var(--color-text-muted)]">
-              Availability: {profile.trust_profile.availability.replace("_", " ")}
-            </p>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-            This person has not added mentor/peer context yet.
-          </p>
-        )}
       </section>
 
+      {/* Trust profile */}
+      {profile.trust_profile && (
+        <section className="rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-4 space-y-3">
+          <h3 className="text-[13px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+            Expertise
+          </h3>
+          {profile.trust_profile.topics && (
+            <p className="text-sm">{profile.trust_profile.topics}</p>
+          )}
+          {profile.trust_profile.lived_experience && (
+            <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
+              {profile.trust_profile.lived_experience}
+            </p>
+          )}
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {profile.trust_profile.availability.replace("_", " ")}
+          </p>
+        </section>
+      )}
+
+      {/* Content grid */}
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold">Proof moments</h3>
+        <h3 className="text-[13px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
+          Moments
+        </h3>
         {content.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">
+          <p className="text-sm text-[var(--color-text-muted)] text-center py-8">
             No content yet.
           </p>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-1">
             {content.map((item) => (
               <ProfileContentPreview
                 key={item.id}
