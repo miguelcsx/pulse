@@ -5,10 +5,21 @@
 :80 {
 	encode zstd gzip
 
-	@api path /api/* /ws /uploads/*
-	reverse_proxy @api stone:8080
+	handle /api/* {
+		reverse_proxy stone:8080
+	}
 
-	root * /srv/ember
-	try_files {path} /index.html
-	file_server
+	handle /ws {
+		reverse_proxy stone:8080
+	}
+
+	handle /uploads/* {
+		reverse_proxy stone:8080
+	}
+
+	handle {
+		root * /srv/ember
+		try_files {path} /index.html
+		file_server
+	}
 }
