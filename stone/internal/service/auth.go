@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -35,6 +38,7 @@ var (
 	ErrInvalidRefreshToken = errors.New("invalid refresh token")
 	ErrAccountLocked       = errors.New("account temporarily locked due to too many failed login attempts")
 	ErrDuplicateUser       = errors.New("handle or email already taken")
+	ErrInvalidDemoHandle   = errors.New("demo handle must be 3-30 letters, numbers, underscores, dots, or hyphens")
 )
 
 const refreshReplayGrace = 15 * time.Second
@@ -115,6 +119,59 @@ func (s *AuthService) Login(email, password string) (*model.User, string, string
 
 	// Successful login — clear the failed attempt counter.
 	s.clearFailedAttempts(email)
+
+	accessToken, refreshToken, err := s.generateTokens(user.ID)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	return &user, accessToken, refreshToken, nil
+}
+
+// DemoLogin finds or creates a throwaway demo user addressed only by handle.
+func (s *AuthService) DemoLogin(handle string) (*model.User, string, string, error) {
+	normalized, err := normalizeDemoHandle(handle)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	email := normalized + "@demo.pulse.local"
+	displayName := "@" + normalized
+
+	var user model.User
+	err = s.db.Where("handle = ?", normalized).First(&user).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, "", "", fmt.Errorf("failed to find demo user: %w", err)
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		password, err := randomDemoPassword()
+		if err != nil {
+			return nil, "", "", err
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("failed to hash demo password: %w", err)
+		}
+
+		user = model.User{
+			Handle:      normalized,
+			Email:       email,
+			Password:    string(hashed),
+			DisplayName: displayName,
+			Bio:         "Demo day account",
+		}
+		if err := s.db.Create(&user).Error; err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				if err := s.db.Where("handle = ?", normalized).First(&user).Error; err != nil {
+					return nil, "", "", fmt.Errorf("failed to load existing demo user: %w", err)
+				}
+			} else {
+				return nil, "", "", fmt.Errorf("failed to create demo user: %w", err)
+			}
+		}
+	}
 
 	accessToken, refreshToken, err := s.generateTokens(user.ID)
 	if err != nil {
@@ -291,6 +348,29 @@ func (s *AuthService) clearFailedAttempts(email string) {
 		return
 	}
 	s.rdb.Del(context.Background(), s.lockoutKey(email))
+}
+
+func normalizeDemoHandle(raw string) (string, error) {
+	handle := strings.TrimPrefix(strings.TrimSpace(raw), "@")
+	handle = strings.ToLower(handle)
+	if len(handle) < 3 || len(handle) > 30 {
+		return "", ErrInvalidDemoHandle
+	}
+	for _, r := range handle {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return "", ErrInvalidDemoHandle
+	}
+	return handle, nil
+}
+
+func randomDemoPassword() (string, error) {
+	b := make([]byte, 24)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate demo password: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // --- Token generation ---

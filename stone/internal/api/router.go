@@ -149,6 +149,7 @@ func (s *Server) setupRoutes() {
 		{
 			auth.POST("/register", s.Register)
 			auth.POST("/login", s.Login)
+			auth.POST("/demo", s.DemoLogin)
 			auth.POST("/refresh", s.Refresh)
 			auth.POST("/logout", s.Logout)
 		}

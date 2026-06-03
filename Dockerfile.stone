@@ -1,0 +1,25 @@
+FROM golang:1.25-bookworm AS build
+
+WORKDIR /src/stone
+COPY stone/go.mod stone/go.sum ./
+RUN go mod download
+
+COPY stone ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server \
+  && CGO_ENABLED=0 GOOS=linux go build -o /out/migrate ./cmd/migrate \
+  && CGO_ENABLED=0 GOOS=linux go build -o /out/seed ./cmd/seed
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=build /out/server /app/server
+COPY --from=build /out/migrate /app/migrate
+COPY --from=build /out/seed /app/seed
+COPY stone/internal/db/seed/demo/fixture.json /app/internal/db/seed/demo/fixture.json
+
+EXPOSE 8080
+CMD ["/app/server"]

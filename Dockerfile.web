@@ -1,0 +1,18 @@
+FROM node:25-bookworm AS build
+
+WORKDIR /src
+COPY drift/ts ./drift/ts
+COPY ember/package.json ember/package-lock.json ./ember/
+WORKDIR /src/ember
+RUN npm ci
+
+WORKDIR /src
+COPY ember ./ember
+WORKDIR /src/ember
+ARG VITE_DEMO_AUTH_ENABLED=true
+ENV VITE_DEMO_AUTH_ENABLED=${VITE_DEMO_AUTH_ENABLED}
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY deploy/lightsail/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /src/ember/dist /srv/ember

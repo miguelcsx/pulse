@@ -12,6 +12,11 @@ export async function login(
   return response.data;
 }
 
+export async function demoLogin(handle: string): Promise<AuthTokens> {
+  const response = await client.post<AuthTokens>("/auth/demo", { handle });
+  return response.data;
+}
+
 export async function register(data: RegisterRequest): Promise<AuthTokens> {
   const response = await client.post<AuthTokens>("/auth/register", data);
   return response.data;

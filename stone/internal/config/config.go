@@ -29,6 +29,7 @@ type Config struct {
 	AuthCSRFCookieDomain      string        `envconfig:"AUTH_CSRF_COOKIE_DOMAIN" default:""`
 	AuthCSRFCookieSameSite    string        `envconfig:"AUTH_CSRF_COOKIE_SAMESITE" default:"lax"`
 	AuthCSRFHeaderName        string        `envconfig:"AUTH_CSRF_HEADER_NAME" default:"X-CSRF-Token"`
+	DemoAuthEnabled           bool          `envconfig:"DEMO_AUTH_ENABLED" default:"false"`
 
 	APIBasePath      string `envconfig:"API_BASE_PATH" default:"/api/v1"`
 	StoragePath      string `envconfig:"STORAGE_PATH" default:"./uploads"`

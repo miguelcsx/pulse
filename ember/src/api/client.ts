@@ -42,6 +42,7 @@ client.interceptors.response.use(
       !originalRequest ||
       originalRequest._retry ||
       requestURL.includes("/auth/refresh") ||
+      requestURL.includes("/auth/demo") ||
       requestURL.includes("/auth/login") ||
       requestURL.includes("/auth/register") ||
       requestURL.includes("/auth/logout")

@@ -1,0 +1,14 @@
+{
+	auto_https off
+}
+
+:80 {
+	encode zstd gzip
+
+	@api path /api/* /ws /uploads/*
+	reverse_proxy @api stone:8080
+
+	root * /srv/ember
+	try_files {path} /index.html
+	file_server
+}

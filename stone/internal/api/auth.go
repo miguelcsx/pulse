@@ -28,6 +28,10 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type demoLoginRequest struct {
+	Handle string `json:"handle" binding:"required"`
+}
+
 type refreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
@@ -71,6 +75,36 @@ func (s *Server) Login(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	s.issueCSRFCookie(c)
+	s.setRefreshCookie(c, refreshToken)
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": accessToken,
+		"user":         toSelfUserResponse(user),
+	})
+}
+
+func (s *Server) DemoLogin(c *gin.Context) {
+	if !s.cfg.DemoAuthEnabled {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+
+	var req demoLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, accessToken, refreshToken, err := s.authService.DemoLogin(req.Handle)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidDemoHandle) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start demo session"})
 		return
 	}
 

@@ -1,0 +1,10 @@
+.git
+**/.direnv
+**/node_modules
+**/dist
+**/.env
+**/.envrc
+stone/bin
+stone/secrets
+stone/uploads
+progress.md

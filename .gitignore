@@ -27,6 +27,7 @@ result-*
 
 # Local infrastructure data (postgres, redis)
 .data/
+.lightsail/
 
 # Flake locks are per-folder — tracked individually
 # (each component's flake.lock is committed)

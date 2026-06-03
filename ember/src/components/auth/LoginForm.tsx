@@ -3,16 +3,21 @@ import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AxiosError } from "axios";
 import client from "../../api/client";
+import { demoLogin } from "../../api/auth";
 import { useAuthStore } from "../../store/authStore";
 import type { AuthTokens } from "@pulse/drift/types";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
 
+const demoAuthEnabled = import.meta.env.VITE_DEMO_AUTH_ENABLED === "true";
+
 export default function LoginForm() {
+  const [handle, setHandle] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const setTokens = useAuthStore((s) => s.setTokens);
   const setUser = useAuthStore((s) => s.setUser);
@@ -39,8 +44,53 @@ export default function LoginForm() {
     }
   }
 
+  async function handleDemoSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setDemoLoading(true);
+
+    try {
+      const res = await demoLogin(handle);
+      setTokens(res.access_token);
+      setUser(res.user);
+      navigate("/");
+    } catch (err) {
+      const axiosErr = err as AxiosError<{ error: string }>;
+      setError(axiosErr.response?.data?.error ?? "Could not start demo session");
+    } finally {
+      setDemoLoading(false);
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      {demoAuthEnabled && (
+        <form onSubmit={handleDemoSubmit} className="flex flex-col gap-4">
+          <Input
+            label="Demo username"
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+            placeholder="yourname"
+            minLength={3}
+            maxLength={30}
+            pattern="[A-Za-z0-9_.-]+"
+            required
+          />
+          <Button type="submit" loading={demoLoading}>
+            Enter demo
+          </Button>
+        </form>
+      )}
+
+      {demoAuthEnabled && (
+        <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
+          <span className="h-px flex-1 bg-[var(--color-border)]" />
+          <span>or sign in normally</span>
+          <span className="h-px flex-1 bg-[var(--color-border)]" />
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <Input
         label="Email"
         type="email"
@@ -72,6 +122,7 @@ export default function LoginForm() {
           Register
         </Link>
       </p>
-    </form>
+      </form>
+    </div>
   );
 }
