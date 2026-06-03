@@ -53,7 +53,7 @@ jobs:
           file: Dockerfile.web
           push: true
           build-args: |
-            VITE_DEMO_AUTH_ENABLED=true
+            VITE_DEMO_MODE=true
           tags: |
             ${{ env.WEB_IMAGE }}
             ${{ env.REGISTRY_IMAGE }}/web:latest
@@ -118,20 +118,26 @@ jobs:
           scp -i ~/.ssh/lightsail /tmp/pulse.env \
             "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/home/${{ secrets.LIGHTSAIL_USER }}/pulse/deploy/lightsail/.env"
 
-      - name: Login remote Docker to GHCR
+      - name: Pull and restart on Lightsail
         env:
           GHCR_TOKEN: ${{ github.token }}
-        run: |
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" \
-            "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
-
-      - name: Deploy containers
-        env:
           SEED_DEMO_DATA: ${{ secrets.SEED_DEMO_DATA }}
         run: |
-          ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" \
-            "cd /home/${{ secrets.LIGHTSAIL_USER }}/pulse/deploy/lightsail && chmod +x deploy.sh && SEED_DEMO_DATA=${SEED_DEMO_DATA:-false} ./deploy.sh"
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" '
+            set -eu
+            docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            trap "docker logout ghcr.io >/dev/null 2>&1 || true" EXIT
+            cd /home/${{ secrets.LIGHTSAIL_USER }}/pulse/deploy/lightsail
+            docker compose pull postgres redis stone web
+            docker compose --profile ops run --rm migrate
+            if [ "${SEED_DEMO_DATA:-false}" = "true" ] && [ ! -f .seeded ]; then
+              docker compose --profile ops run --rm seed
+              touch .seeded
+            fi
+            docker compose up -d stone web
+            docker image prune -f >/dev/null 2>&1 || true
+          '
 
       - name: Health check
         run: |
-          curl --fail --retry 20 --retry-delay 5 "${{ secrets.PULSE_ORIGIN }}/api/v1/health"
+          curl --fail --retry 20 --retry-delay 5 --retry-connrefused "${{ secrets.PULSE_ORIGIN }}/api/v1/health"

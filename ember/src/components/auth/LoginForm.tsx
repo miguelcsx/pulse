@@ -9,7 +9,7 @@ import type { AuthTokens } from "@pulse/drift/types";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
 
-const demoAuthEnabled = import.meta.env.VITE_DEMO_AUTH_ENABLED === "true";
+const demoAuthEnabled = import.meta.env.VITE_DEMO_MODE === "true";
 
 export default function LoginForm() {
   const [handle, setHandle] = useState("");
