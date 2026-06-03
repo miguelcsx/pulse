@@ -258,7 +258,7 @@ func (s *Server) validateCSRFCookieHeader(c *gin.Context) bool {
 }
 
 func (s *Server) cookieSecure() bool {
-	return s.cfg.AuthCookieSecure || s.cfg.Env == "production"
+	return s.cfg.AuthCookieSecure
 }
 
 func parseSameSite(raw string) http.SameSite {

@@ -82,7 +82,7 @@ export default function Feed() {
           loadMore();
         }
       },
-      { rootMargin: "800px 0px" },
+      { rootMargin: "200px 0px" },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();

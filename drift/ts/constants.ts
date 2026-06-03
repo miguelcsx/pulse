@@ -9,7 +9,7 @@ export const WS_MESSAGE_TYPES = {
   NOTIFICATION: "notification",
 } as const;
 
-export const FEED_PAGE_SIZE = 20;
+export const FEED_PAGE_SIZE = 8;
 export const SUGGESTIONS_LIMIT = 5;
 
 export const JWT_STORAGE_KEY = "pulse_access_token";

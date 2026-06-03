@@ -73,7 +73,7 @@ export default function LoginForm() {
             placeholder="yourname"
             minLength={3}
             maxLength={30}
-            pattern="[A-Za-z0-9_.-]+"
+            pattern="[A-Za-z0-9_.\\-]+"
             required
           />
           <Button type="submit" loading={demoLoading}>

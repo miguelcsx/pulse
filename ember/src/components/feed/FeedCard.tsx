@@ -22,7 +22,7 @@ function FeedVideoPreview({ content }: { content: FeedItem }) {
       className="mx-auto w-full max-h-[70dvh] aspect-[9/16] object-cover bg-black"
       playsInline
       muted
-      preload="metadata"
+      preload="none"
       videoRef={videoRef}
     />
   );
