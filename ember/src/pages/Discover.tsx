@@ -37,8 +37,6 @@ export default function Discover() {
   }
 
   const bridges = data?.bridges ?? [];
-  const sessions = data?.help_sessions ?? [];
-
   return (
     <div className="space-y-8 pb-4">
       {/* Header */}
@@ -50,10 +48,9 @@ export default function Discover() {
       </section>
 
       {/* Stats */}
-      <section className="grid grid-cols-3 gap-3">
+      <section className="grid grid-cols-2 gap-3">
         {[
           { value: bridges.length, label: "Bridges" },
-          { value: sessions.length, label: "Live rooms" },
           { value: data?.trust_profile?.helped_count ?? 0, label: "Helped" },
         ].map((stat) => (
           <div
@@ -89,30 +86,6 @@ export default function Discover() {
           ))
         )}
       </section>
-
-      {/* Live rooms */}
-      {sessions.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-[17px] font-semibold">Live rooms</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {sessions.map((session) => (
-              <article
-                key={session.id}
-                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4"
-              >
-                <p className="text-sm font-medium">{session.title}</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  {session.description}
-                </p>
-                <div className="mt-3 flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
-                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  {session.member_count} inside
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

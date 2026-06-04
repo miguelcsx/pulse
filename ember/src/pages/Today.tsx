@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import type {
   Bridge,
   DesiredHelpType,
-  HelpSession,
   TodayResponse,
 } from "@pulse/drift/types";
-import { createAsk, getToday, joinHelpSession } from "../api/advice";
+import { createAsk, getToday } from "../api/advice";
 import BridgeCard from "../components/advice/BridgeCard";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
@@ -90,25 +89,6 @@ export default function Today() {
     );
   }
 
-  async function handleJoin(session: HelpSession) {
-    try {
-      const updated = await joinHelpSession(session.id);
-      setData((prev) =>
-        prev
-          ? {
-              ...prev,
-              help_sessions: prev.help_sessions.map((s) =>
-                s.id === updated.id ? updated : s,
-              ),
-            }
-          : prev,
-      );
-      addToast("Joined session", "success");
-    } catch {
-      addToast("Failed to join session", "error");
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -118,7 +98,6 @@ export default function Today() {
   }
 
   const bridges = data?.bridges ?? [];
-  const sessions = data?.help_sessions ?? [];
   const starterPrompts = data?.starter_prompts ?? [];
 
   return (
@@ -234,43 +213,6 @@ export default function Today() {
         </section>
       )}
 
-      {/* Live rooms */}
-      {sessions.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-[17px] font-semibold">Live rooms</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {sessions.map((session) => (
-              <article
-                key={session.id}
-                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 flex flex-col"
-              >
-                <p className="text-sm font-medium">{session.title}</p>
-                <p className="mt-1.5 flex-1 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  {session.description}
-                </p>
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    </span>
-                    <span className="text-xs text-[var(--color-text-muted)]">
-                      {session.member_count}
-                    </span>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleJoin(session)}
-                  >
-                    Join
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }

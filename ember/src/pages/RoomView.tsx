@@ -108,7 +108,11 @@ export default function RoomView() {
       </button>
 
       <section className="rounded-[var(--radius-md)] bg-[var(--color-bg-elevated)] border border-[var(--color-border)] p-5">
-        <h2 className="text-xl font-semibold mb-3">Room</h2>
+        <h2 className="text-xl font-semibold mb-2">Shared context</h2>
+        <p className="mb-3 text-sm text-[var(--color-text-muted)]">
+          Related moments from people posting around the same tags. Joining only
+          marks that you are exploring this context.
+        </p>
         <PresenceIndicator count={presence} />
         {error && (
           <p className="mt-3 text-sm text-[var(--color-error)]">{error}</p>
@@ -119,15 +123,15 @@ export default function RoomView() {
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-sm text-[var(--color-success)]">
                 <span className="h-2 w-2 rounded-full bg-[var(--color-success)]" />
-                You&rsquo;re in this room
+                You&rsquo;re exploring this context
               </p>
               <Button variant="danger" onClick={handleLeave} loading={loading}>
-                Leave room
+                Leave context
               </Button>
             </div>
           ) : (
             <Button variant="accent" onClick={handleEnter} loading={loading}>
-              Enter room
+              Explore context
             </Button>
           )}
         </div>
@@ -135,7 +139,7 @@ export default function RoomView() {
 
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-[17px] font-semibold">Room feed</h3>
+          <h3 className="text-[17px] font-semibold">Related moments</h3>
           {roomContent.length > 0 && (
             <span className="text-xs text-[var(--color-text-muted)] tabular-nums">
               {roomContent.length} posts
@@ -151,7 +155,7 @@ export default function RoomView() {
           <p className="text-sm text-[var(--color-error)]">{contentError}</p>
         ) : roomContent.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)] text-center py-8">
-            No content in this room yet.
+            No related moments yet.
           </p>
         ) : (
           <div className="space-y-4">

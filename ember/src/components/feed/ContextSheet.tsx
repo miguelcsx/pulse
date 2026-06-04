@@ -29,7 +29,7 @@ export default function ContextSheet() {
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--color-surface-active)]" />
 
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Active vibe</h3>
+          <h3 className="text-lg font-semibold">Shared context</h3>
           <button
             onClick={closeSheet}
             className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors"
@@ -62,8 +62,8 @@ export default function ContextSheet() {
         </div>
 
         <p className="text-sm text-[var(--color-text-muted)] mb-6">
-          {activeRoom.member_count}{" "}
-          {activeRoom.member_count === 1 ? "person" : "people"} here now
+          Pulse groups nearby moments by shared tags. This is a related feed,
+          not a chat room.
         </p>
 
         <Link
@@ -71,7 +71,7 @@ export default function ContextSheet() {
           onClick={closeSheet}
           className="block w-full text-center px-4 py-3 rounded-[var(--radius-sm)] bg-[var(--color-accent)] text-white font-medium text-sm hover:bg-[var(--color-accent-hover)] transition-colors"
         >
-          Enter room
+          View related moments
         </Link>
       </div>
     </div>
