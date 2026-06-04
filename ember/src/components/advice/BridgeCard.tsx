@@ -34,9 +34,9 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
       const updated = await askBridge(bridge.id);
       setStatus(updated.status);
       onUpdate?.(updated);
-      addToast("Bridge opened", "success");
+      addToast("Perspective requested", "success");
     } catch {
-      addToast("Failed to open bridge", "error");
+      addToast("Failed to request perspective", "error");
     } finally {
       setBusy(false);
     }
@@ -95,7 +95,9 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button size="sm" variant="accent" onClick={handleAsk} loading={busy}>
-          {status === "asked" ? "Asked" : "Ask"}
+          {status === "asked" || status === "responded"
+            ? "Requested"
+            : "Request perspective"}
         </Button>
         <Link
           to={`/profile/${user.id}`}

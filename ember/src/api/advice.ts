@@ -33,6 +33,16 @@ export async function askBridge(bridgeId: string, message = ""): Promise<Bridge>
   return response.data;
 }
 
+export async function respondBridge(
+  bridgeId: string,
+  message = "",
+): Promise<Bridge> {
+  const response = await client.post<Bridge>(`/bridges/${bridgeId}/respond`, {
+    message,
+  });
+  return response.data;
+}
+
 export async function signalBridge(
   bridgeId: string,
   kind: HelpSignalKind,

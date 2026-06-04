@@ -4,7 +4,7 @@ import type {
   DesiredHelpType,
   TodayResponse,
 } from "@pulse/drift/types";
-import { createAsk, getToday } from "../api/advice";
+import { createAsk, getToday, respondBridge } from "../api/advice";
 import BridgeCard from "../components/advice/BridgeCard";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
@@ -64,6 +64,7 @@ export default function Today() {
       setData((prev) => ({
         latest_ask: res.ask,
         bridges: res.bridges,
+        incoming_bridges: prev?.incoming_bridges ?? [],
         help_sessions: prev?.help_sessions ?? [],
         trust_profile: prev?.trust_profile,
         starter_prompts: prev?.starter_prompts ?? [],
@@ -84,9 +85,22 @@ export default function Today() {
             bridges: prev.bridges.map((b) =>
               b.id === updated.id ? updated : b,
             ),
+            incoming_bridges: (prev.incoming_bridges ?? []).map((b) =>
+              b.id === updated.id ? updated : b,
+            ),
           }
         : prev,
     );
+  }
+
+  async function handleRespond(bridge: Bridge) {
+    try {
+      const updated = await respondBridge(bridge.id);
+      updateBridge(updated);
+      addToast("Perspective offered", "success");
+    } catch {
+      addToast("Failed to offer perspective", "error");
+    }
   }
 
   if (loading) {
@@ -98,6 +112,7 @@ export default function Today() {
   }
 
   const bridges = data?.bridges ?? [];
+  const incomingBridges = data?.incoming_bridges ?? [];
   const starterPrompts = data?.starter_prompts ?? [];
 
   return (
@@ -182,6 +197,69 @@ export default function Today() {
               {data.latest_ask.triage_summary}
             </p>
           )}
+        </section>
+      )}
+
+      {/* Incoming asks */}
+      {incomingBridges.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[17px] font-semibold">
+              Perspectives you can add
+            </h2>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+              These appear because someone&rsquo;s ask overlaps with your
+              moments, topics, or lived context.
+            </p>
+          </div>
+          {incomingBridges.map((bridge) => {
+            const asker = bridge.ask?.user;
+            const isResponded = bridge.status === "responded";
+
+            return (
+              <article
+                key={bridge.id}
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-active)] text-sm font-semibold text-[var(--color-text-secondary)]">
+                    {asker?.display_name?.[0] || asker?.handle?.[0] || "?"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-semibold">
+                        {asker?.display_name || asker?.handle || "Someone"}
+                      </p>
+                      <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]">
+                        {bridge.bridge_type.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    {asker?.handle && (
+                      <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                        @{asker.handle}
+                      </p>
+                    )}
+                    <p className="mt-3 text-sm leading-relaxed">
+                      {bridge.ask?.question}
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                      {bridge.reason}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant={isResponded ? "secondary" : "accent"}
+                    onClick={() => handleRespond(bridge)}
+                    disabled={isResponded}
+                  >
+                    {isResponded ? "Perspective offered" : "Offer perspective"}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </section>
       )}
 

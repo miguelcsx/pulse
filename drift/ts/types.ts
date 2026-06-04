@@ -169,6 +169,7 @@ export interface AskCreateInput {
 export interface Bridge {
   id: string;
   ask_id: string;
+  ask?: Ask;
   requester_id: string;
   recommended_user_id: string;
   recommended_user: User;
@@ -224,6 +225,7 @@ export interface HelpSession {
 export interface TodayResponse {
   latest_ask?: Ask;
   bridges: Bridge[];
+  incoming_bridges: Bridge[];
   help_sessions: HelpSession[];
   trust_profile?: TrustProfile;
   starter_prompts: string[];

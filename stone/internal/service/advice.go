@@ -39,11 +39,12 @@ type HelpSignalInput struct {
 }
 
 type TodayResult struct {
-	LatestAsk      *model.Ask          `json:"latest_ask,omitempty"`
-	Bridges        []model.Bridge      `json:"bridges"`
-	HelpSessions   []model.HelpSession `json:"help_sessions"`
-	TrustProfile   *model.TrustProfile `json:"trust_profile,omitempty"`
-	StarterPrompts []string            `json:"starter_prompts"`
+	LatestAsk       *model.Ask          `json:"latest_ask,omitempty"`
+	Bridges         []model.Bridge      `json:"bridges"`
+	IncomingBridges []model.Bridge      `json:"incoming_bridges"`
+	HelpSessions    []model.HelpSession `json:"help_sessions"`
+	TrustProfile    *model.TrustProfile `json:"trust_profile,omitempty"`
+	StarterPrompts  []string            `json:"starter_prompts"`
 }
 
 type AdviceService struct {
@@ -236,8 +237,9 @@ func (s *AdviceService) GetTrustProfile(userID uuid.UUID) (*model.TrustProfile, 
 
 func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 	result := &TodayResult{
-		Bridges:      []model.Bridge{},
-		HelpSessions: []model.HelpSession{},
+		Bridges:         []model.Bridge{},
+		IncomingBridges: []model.Bridge{},
+		HelpSessions:    []model.HelpSession{},
 		StarterPrompts: []string{
 			"I'm stuck getting my first 10 users.",
 			"I need a peer to review my launch plan.",
@@ -252,6 +254,9 @@ func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 		result.Bridges = bridges
 	}
 
+	incoming, _ := s.GetIncomingBridges(userID, 8)
+	result.IncomingBridges = incoming
+
 	sessions, _ := s.ListHelpSessions(userID)
 	result.HelpSessions = sessions
 
@@ -260,6 +265,27 @@ func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 	}
 
 	return result, nil
+}
+
+func (s *AdviceService) GetIncomingBridges(userID uuid.UUID, limit int) ([]model.Bridge, error) {
+	if limit <= 0 {
+		limit = 8
+	}
+	if limit > 20 {
+		limit = 20
+	}
+
+	var bridges []model.Bridge
+	err := s.db.Preload("Ask.User").
+		Preload("RecommendedUser").
+		Where("recommended_user_id = ? AND status <> ?", userID, model.BridgeStatusDismissed).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&bridges).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to load incoming bridges: %w", err)
+	}
+	return bridges, nil
 }
 
 func (s *AdviceService) ListHelpSessions(userID uuid.UUID) ([]model.HelpSession, error) {
@@ -404,7 +430,7 @@ func (s *AdviceService) updateBridgeStatus(bridgeID, userID uuid.UUID, status st
 
 func (s *AdviceService) loadBridge(id uuid.UUID) (*model.Bridge, error) {
 	var bridge model.Bridge
-	if err := s.db.Preload("RecommendedUser").First(&bridge, "id = ?", id).Error; err != nil {
+	if err := s.db.Preload("Ask.User").Preload("RecommendedUser").First(&bridge, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 	return &bridge, nil
