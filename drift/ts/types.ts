@@ -118,14 +118,30 @@ export interface RoomContext {
   member_count: number;
 }
 
-// Feed item with optional room context
-export interface FeedItem extends Content {
+// Feed content moment with optional room context
+export interface FeedMoment extends Content {
   room_context?: RoomContext;
+}
+
+export interface AffinityFeedItem {
+  id: string;
+  unit_type: "moment" | "ask";
+  content?: FeedMoment;
+  bridge?: Bridge;
+  room_context?: RoomContext;
+  reason?: string;
+  created_at: string;
 }
 
 // Feed
 export interface FeedResponse {
-  items: FeedItem[];
+  items: AffinityFeedItem[];
+  next_cursor: string;
+  has_more: boolean;
+}
+
+export interface ContentFeedResponse {
+  items: Content[];
   next_cursor: string;
   has_more: boolean;
 }

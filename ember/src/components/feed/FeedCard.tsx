@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import type { FeedItem } from "@pulse/drift/types";
+import type { FeedMoment } from "@pulse/drift/types";
 import ReactionBar from "./ReactionBar";
 import MediaFallback from "../ui/MediaFallback";
 import { useDwell } from "../../hooks/useDwell";
@@ -7,11 +7,11 @@ import { trackView } from "../../api/events";
 import { useVideoAutoplay } from "../../hooks/useVideoAutoplay";
 
 interface Props {
-  content: FeedItem;
+  content: FeedMoment;
   onClick?: () => void;
 }
 
-function FeedVideoPreview({ content }: { content: FeedItem }) {
+function FeedVideoPreview({ content }: { content: FeedMoment }) {
   const videoRef = useVideoAutoplay();
 
   return (
@@ -28,7 +28,7 @@ function FeedVideoPreview({ content }: { content: FeedItem }) {
   );
 }
 
-function renderPreview(content: FeedItem) {
+function renderPreview(content: FeedMoment) {
   switch (content.content_type) {
     case "image":
       return (

@@ -1,5 +1,6 @@
 import type {
   Content,
+  ContentFeedResponse,
   ContentType,
   FeedResponse,
   MediaAsset,
@@ -96,12 +97,15 @@ export async function getUserContent(
   userId: string,
   cursor?: string,
   limit: number = FEED_PAGE_SIZE,
-): Promise<FeedResponse> {
+): Promise<ContentFeedResponse> {
   const params: Record<string, string | number> = { limit };
   if (cursor) {
     params.cursor = cursor;
   }
-  const response = await client.get<FeedResponse>(`/users/${userId}/content`, { params });
+  const response = await client.get<ContentFeedResponse>(
+    `/users/${userId}/content`,
+    { params },
+  );
   return response.data;
 }
 

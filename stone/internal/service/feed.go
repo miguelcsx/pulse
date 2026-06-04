@@ -22,10 +22,21 @@ type RoomContext struct {
 	MemberCount int64     `json:"member_count"`
 }
 
-// FeedItem wraps a Content with optional room context.
+const (
+	FeedUnitMoment = "moment"
+	FeedUnitAsk    = "ask"
+)
+
+// FeedItem is one unit in the affinity path. Moments are content cards; asks
+// are bridge cards addressed to people whose context overlaps the question.
 type FeedItem struct {
-	model.Content
-	RoomContext *RoomContext `json:"room_context,omitempty"`
+	ID          uuid.UUID      `json:"id"`
+	UnitType    string         `json:"unit_type"`
+	Content     *model.Content `json:"content,omitempty"`
+	Bridge      *model.Bridge  `json:"bridge,omitempty"`
+	RoomContext *RoomContext   `json:"room_context,omitempty"`
+	Reason      string         `json:"reason,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
 }
 
 type scoredContent struct {
@@ -159,10 +170,18 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 
 	roomMap := s.enrichWithRoomContext(contents)
 
-	items := make([]FeedItem, len(contents))
+	items := make([]FeedItem, 0, len(contents)+3)
 	for i, c := range contents {
-		items[i] = FeedItem{Content: c, RoomContext: roomMap[c.ID]}
+		content := contents[i]
+		items = append(items, FeedItem{
+			ID:          c.ID,
+			UnitType:    FeedUnitMoment,
+			Content:     &content,
+			RoomContext: roomMap[c.ID],
+			CreatedAt:   c.CreatedAt,
+		})
 	}
+	items = s.mixAffinityAsks(userID, items)
 
 	var nextCursor string
 	if hasMore {
@@ -170,6 +189,45 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 	}
 
 	return items, nextCursor, hasMore, nil
+}
+
+func (s *FeedService) mixAffinityAsks(userID uuid.UUID, items []FeedItem) []FeedItem {
+	var bridges []model.Bridge
+	if err := s.db.Preload("Ask.User").
+		Preload("RecommendedUser").
+		Where("recommended_user_id = ? AND status <> ?", userID, model.BridgeStatusDismissed).
+		Order("created_at DESC").
+		Limit(3).
+		Find(&bridges).Error; err != nil || len(bridges) == 0 {
+		return items
+	}
+
+	units := make([]FeedItem, 0, len(items)+len(bridges))
+	bridgeIndex := 0
+	for i, item := range items {
+		if i == 1 || (i == 4 && len(bridges) > 1) || (i == 8 && len(bridges) > 2) {
+			bridge := bridges[bridgeIndex]
+			units = append(units, bridgeFeedItem(bridge))
+			bridgeIndex++
+		}
+		units = append(units, item)
+	}
+	for bridgeIndex < len(bridges) {
+		bridge := bridges[bridgeIndex]
+		units = append(units, bridgeFeedItem(bridge))
+		bridgeIndex++
+	}
+	return units
+}
+
+func bridgeFeedItem(bridge model.Bridge) FeedItem {
+	return FeedItem{
+		ID:        bridge.ID,
+		UnitType:  FeedUnitAsk,
+		Bridge:    &bridge,
+		Reason:    bridge.Reason,
+		CreatedAt: bridge.CreatedAt,
+	}
 }
 
 // ---------------------------------------------------------------------------

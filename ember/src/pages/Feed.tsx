@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { getFeed } from "../api/content";
 import FeedCard from "../components/feed/FeedCard";
+import AskPathCard from "../components/feed/AskPathCard";
 import ContentModal from "../components/feed/ContentModal";
 import Spinner from "../components/ui/Spinner";
 import TrendingTags from "../components/content/TrendingTags";
@@ -8,22 +9,30 @@ import { useUiStore } from "../store/uiStore";
 import { useFeedContextStore } from "../store/feedContextStore";
 import { useVisibleRoomContext } from "../hooks/useVisibleRoomContext";
 import { usePageTitle } from "../hooks/usePageTitle";
-import type { FeedItem } from "@pulse/drift/types";
+import type { AffinityFeedItem, Bridge, FeedMoment } from "@pulse/drift/types";
 
 export default function Feed() {
   usePageTitle("Feed");
-  const [items, setItems] = useState<FeedItem[]>([]);
+  const [items, setItems] = useState<AffinityFeedItem[]>([]);
   const [cursor, setCursor] = useState("");
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [selected, setSelected] = useState<FeedItem | null>(null);
+  const [selected, setSelected] = useState<FeedMoment | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const loadingMoreRef = useRef(false);
   const addToast = useUiStore((s) => s.addToast);
   const setActiveRoom = useFeedContextStore((s) => s.setActiveRoom);
   const observe = useVisibleRoomContext(items);
+
+  function updateBridge(updated: Bridge) {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.bridge?.id === updated.id ? { ...item, bridge: updated } : item,
+      ),
+    );
+  }
 
   const loadFeed = useCallback(
     async (nextCursor?: string) => {
@@ -127,16 +136,26 @@ export default function Feed() {
         </div>
       ) : (
         <>
-          {items.map((item) => (
-            <Fragment key={item.id}>
-              <div ref={observe} data-content-id={item.id}>
-                <FeedCard
-                  content={item}
-                  onClick={() => setSelected(item)}
-                />
-              </div>
-            </Fragment>
-          ))}
+          {items.map((item) => {
+            const moment = item.content
+              ? { ...item.content, room_context: item.room_context }
+              : null;
+
+            return (
+              <Fragment key={`${item.unit_type}-${item.id}`}>
+                {item.unit_type === "ask" && item.bridge ? (
+                  <AskPathCard bridge={item.bridge} onUpdate={updateBridge} />
+                ) : moment ? (
+                  <div ref={observe} data-content-id={item.id}>
+                    <FeedCard
+                      content={moment}
+                      onClick={() => setSelected(moment)}
+                    />
+                  </div>
+                ) : null}
+              </Fragment>
+            );
+          })}
           <div ref={sentinelRef} className="h-8" />
           {loadingMore && (
             <div className="flex justify-center py-4">

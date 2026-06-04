@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
-import type { FeedItem } from "@pulse/drift/types";
+import type { AffinityFeedItem, FeedMoment } from "@pulse/drift/types";
 import { useFeedContextStore } from "../store/feedContextStore";
 
-export function useVisibleRoomContext(items: FeedItem[]) {
+export function useVisibleRoomContext(items: AffinityFeedItem[]) {
   const setActiveRoom = useFeedContextStore((s) => s.setActiveRoom);
   const visibleIds = useRef(new Set<string>());
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -12,10 +12,13 @@ export function useVisibleRoomContext(items: FeedItem[]) {
   }, [items]);
 
   const computeDominantRoom = useCallback(() => {
-    const roomCounts = new Map<string, { count: number; item: FeedItem }>();
+    const roomCounts = new Map<string, { count: number; item: FeedMoment }>();
 
     for (const id of visibleIds.current) {
-      const item = itemsRef.current.find((i) => i.id === id);
+      const unit = itemsRef.current.find((i) => i.id === id);
+      const item = unit?.content
+        ? { ...unit.content, room_context: unit.room_context }
+        : undefined;
       if (!item?.room_context) continue;
 
       const roomId = item.room_context.room_id;
@@ -27,7 +30,7 @@ export function useVisibleRoomContext(items: FeedItem[]) {
       }
     }
 
-    let dominant: FeedItem | null = null;
+    let dominant: FeedMoment | null = null;
     let maxCount = 0;
     for (const [, { count, item }] of roomCounts) {
       if (count >= 2 && count > maxCount) {
