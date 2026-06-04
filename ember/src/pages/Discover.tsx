@@ -71,6 +71,17 @@ export default function Discover() {
         ))}
       </section>
 
+      <section className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+          Open graph
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+          Pulse does not send every ask to the same popular people. It balances
+          strong affinity with fresh, lower-exposure perspectives so the network
+          keeps expanding.
+        </p>
+      </section>
+
       {/* Bridges */}
       <section className="space-y-3">
         <h2 className="text-[17px] font-semibold">Bridge candidates</h2>

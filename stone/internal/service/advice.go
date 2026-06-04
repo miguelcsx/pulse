@@ -366,10 +366,18 @@ func (s *AdviceService) JoinHelpSession(sessionID, userID uuid.UUID) (*model.Hel
 }
 
 type bridgeCandidate struct {
-	user       model.User
-	reason     string
-	bridgeType string
-	confidence float64
+	user           model.User
+	reason         string
+	bridgeType     string
+	confidence     float64
+	relevance      float64
+	recentExposure int64
+	repeatedPair   bool
+}
+
+type bridgeExposure struct {
+	recentCount    int64
+	requesterCount int64
 }
 
 func (s *AdviceService) rankBridgeCandidates(ask model.Ask, userID uuid.UUID, limit int) ([]bridgeCandidate, error) {
@@ -387,6 +395,12 @@ func (s *AdviceService) rankBridgeCandidates(ask model.Ask, userID uuid.UUID, li
 		return nil, fmt.Errorf("failed to load trust profiles: %w", err)
 	}
 
+	profileIDs := make([]uuid.UUID, 0, len(profiles))
+	for _, profile := range profiles {
+		profileIDs = append(profileIDs, profile.UserID)
+	}
+	exposure := s.loadBridgeExposure(userID, profileIDs)
+
 	askVector := parseVector(ask.Embedding)
 	candidates := make([]bridgeCandidate, 0, len(profiles))
 	for _, profile := range profiles {
@@ -394,16 +408,25 @@ func (s *AdviceService) rankBridgeCandidates(ask model.Ask, userID uuid.UUID, li
 		vectorScore := cosine(askVector, parseVector(profile.ExpertiseVector))
 		quality := math.Min((float64(profile.HelpedCount)*0.04)+(profile.ResponseQuality*0.12), 0.35)
 		availability := availabilityBoost(profile.Availability)
-		score := clampFloat(0.45*textScore+0.35*vectorScore+quality+availability, 0, 1)
-		if score <= 0 {
-			score = 0.12 + quality + availability
+		relevance := clampFloat(0.45*textScore+0.35*vectorScore+quality+availability, 0, 1)
+		if relevance <= 0 {
+			relevance = 0.12 + quality + availability
 		}
-		bridgeType := bridgeTypeForAsk(ask.DesiredHelpType, score, profile)
+		stats := exposure[profile.UserID]
+		exposurePenalty := math.Min(float64(stats.recentCount)*0.08, 0.32)
+		if stats.requesterCount > 0 {
+			exposurePenalty += 0.16
+		}
+		score := clampFloat(relevance-exposurePenalty, 0.08, 1)
+		bridgeType := bridgeTypeForAsk(ask.DesiredHelpType, relevance, profile)
 		candidates = append(candidates, bridgeCandidate{
-			user:       profile.User,
-			reason:     buildAdviceBridgeReason(ask, profile, bridgeType),
-			bridgeType: bridgeType,
-			confidence: roundConfidence(score),
+			user:           profile.User,
+			reason:         buildAdviceBridgeReason(ask, profile, bridgeType),
+			bridgeType:     bridgeType,
+			confidence:     roundConfidence(score),
+			relevance:      roundConfidence(relevance),
+			recentExposure: stats.recentCount,
+			repeatedPair:   stats.requesterCount > 0,
 		})
 	}
 
@@ -418,10 +441,97 @@ func (s *AdviceService) rankBridgeCandidates(ask model.Ask, userID uuid.UUID, li
 	sort.Slice(candidates, func(i, j int) bool {
 		return candidates[i].confidence > candidates[j].confidence
 	})
-	if len(candidates) > limit {
-		candidates = candidates[:limit]
+	return diversifyBridgeCandidates(candidates, limit), nil
+}
+
+func (s *AdviceService) loadBridgeExposure(requesterID uuid.UUID, userIDs []uuid.UUID) map[uuid.UUID]bridgeExposure {
+	result := make(map[uuid.UUID]bridgeExposure, len(userIDs))
+	if len(userIDs) == 0 {
+		return result
 	}
-	return candidates, nil
+
+	type row struct {
+		RecommendedUserID uuid.UUID `gorm:"column:recommended_user_id"`
+		RecentCount       int64     `gorm:"column:recent_count"`
+		RequesterCount    int64     `gorm:"column:requester_count"`
+	}
+	var rows []row
+	err := s.db.Raw(`
+		SELECT
+			recommended_user_id,
+			COUNT(*) FILTER (WHERE created_at > now() - interval '48 hours') AS recent_count,
+			COUNT(*) FILTER (WHERE requester_id = ?) AS requester_count
+		FROM bridges
+		WHERE recommended_user_id IN ?
+		GROUP BY recommended_user_id
+	`, requesterID, userIDs).Scan(&rows).Error
+	if err != nil {
+		return result
+	}
+	for _, row := range rows {
+		result[row.RecommendedUserID] = bridgeExposure{
+			recentCount:    row.RecentCount,
+			requesterCount: row.RequesterCount,
+		}
+	}
+	return result
+}
+
+func diversifyBridgeCandidates(candidates []bridgeCandidate, limit int) []bridgeCandidate {
+	if limit <= 0 || len(candidates) <= limit {
+		return candidates
+	}
+
+	selected := make([]bridgeCandidate, 0, limit)
+	used := make(map[uuid.UUID]bool, limit)
+	anchorCount := limit - 2
+	if anchorCount < 1 {
+		anchorCount = 1
+	}
+	if anchorCount > limit {
+		anchorCount = limit
+	}
+
+	for _, candidate := range candidates {
+		if len(selected) >= anchorCount {
+			break
+		}
+		selected = append(selected, candidate)
+		used[candidate.user.ID] = true
+	}
+
+	exploration := make([]bridgeCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if !used[candidate.user.ID] && candidate.relevance >= 0.18 {
+			exploration = append(exploration, candidate)
+		}
+	}
+	sort.Slice(exploration, func(i, j int) bool {
+		if exploration[i].repeatedPair != exploration[j].repeatedPair {
+			return !exploration[i].repeatedPair
+		}
+		if exploration[i].recentExposure != exploration[j].recentExposure {
+			return exploration[i].recentExposure < exploration[j].recentExposure
+		}
+		return exploration[i].relevance > exploration[j].relevance
+	})
+
+	for _, candidate := range exploration {
+		if len(selected) >= limit {
+			break
+		}
+		selected = append(selected, candidate)
+		used[candidate.user.ID] = true
+	}
+	for _, candidate := range candidates {
+		if len(selected) >= limit {
+			break
+		}
+		if !used[candidate.user.ID] {
+			selected = append(selected, candidate)
+		}
+	}
+	return selected
 }
 
 func (s *AdviceService) coldStartCandidates(ask model.Ask, userID uuid.UUID, limit int) ([]bridgeCandidate, error) {
