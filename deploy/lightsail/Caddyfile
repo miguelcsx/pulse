@@ -4,6 +4,7 @@
 
 :80 {
 	encode zstd gzip
+	header -Strict-Transport-Security
 
 	handle /api/* {
 		reverse_proxy stone:8080
