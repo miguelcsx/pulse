@@ -437,6 +437,13 @@ type CommonsEntry struct {
 	Responses []model.BridgeResponse `json:"responses"`
 }
 
+func commonsResponses(responses []model.BridgeResponse) []model.BridgeResponse {
+	if responses == nil {
+		return []model.BridgeResponse{}
+	}
+	return responses
+}
+
 // ListCommons returns public asks newest first. Answered asks become durable
 // lived perspective; unanswered asks remain visible so Commons never depends on
 // a private manual publish loop before the community can help.
@@ -494,7 +501,7 @@ func (s *AdviceService) ListCommons(userID uuid.UUID, cursor string, limit int) 
 
 	entries := make([]CommonsEntry, 0, len(asks))
 	for _, ask := range asks {
-		responses := responsesByAsk[ask.ID]
+		responses := commonsResponses(responsesByAsk[ask.ID])
 		if ask.Anonymous {
 			// Strip the asker's identity before it leaves the service.
 			ask.User = model.User{}
