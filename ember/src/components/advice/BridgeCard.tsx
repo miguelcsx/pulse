@@ -59,6 +59,7 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
   }
 
   const user = bridge.recommended_user;
+  const response = bridge.responses?.[0];
 
   return (
     <article className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
@@ -90,6 +91,16 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
           <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
             {bridge.reason}
           </p>
+          {response && (
+            <div className="mt-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+                Perspective received
+              </p>
+              <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+                {response.body}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

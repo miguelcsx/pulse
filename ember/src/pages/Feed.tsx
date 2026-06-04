@@ -129,9 +129,10 @@ export default function Feed() {
       </div>
       {items.length === 0 ? (
         <div className="px-4 text-center py-12 text-[var(--color-text-muted)]">
-          <p className="text-lg">No content yet</p>
+          <p className="text-lg">Your affinity path is warming up</p>
           <p className="text-sm mt-2">
-            Follow people or post something to see it here
+            Ask for perspective or share a moment to help Pulse find useful
+            context.
           </p>
         </div>
       ) : (

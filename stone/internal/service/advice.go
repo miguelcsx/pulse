@@ -136,8 +136,11 @@ func (s *AdviceService) GenerateBridges(askID, userID uuid.UUID, limit int) ([]m
 		if err != nil {
 			return nil, fmt.Errorf("failed to persist bridge: %w", err)
 		}
-		bridge.RecommendedUser = candidate.user
-		bridges = append(bridges, bridge)
+		loaded, err := s.loadBridge(bridge.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load bridge: %w", err)
+		}
+		bridges = append(bridges, *loaded)
 	}
 
 	sort.Slice(bridges, func(i, j int) bool {
@@ -155,8 +158,32 @@ func (s *AdviceService) RespondBridge(bridgeID, userID uuid.UUID, input BridgeAc
 	if err := s.db.Where("id = ? AND recommended_user_id = ?", bridgeID, userID).First(&bridge).Error; err != nil {
 		return nil, ErrAdviceNotFound
 	}
-	if err := s.db.Model(&bridge).Updates(map[string]any{"status": model.BridgeStatusResponded}).Error; err != nil {
-		return nil, fmt.Errorf("failed to mark bridge responded: %w", err)
+	body := strings.TrimSpace(input.Message)
+	if body == "" {
+		body = "I can share perspective on this."
+	}
+	if len(body) > 1200 {
+		return nil, fmt.Errorf("response must be 1200 characters or fewer")
+	}
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		response := model.BridgeResponse{
+			BridgeID:    bridge.ID,
+			ResponderID: userID,
+			Body:        body,
+		}
+		if err := tx.Where("bridge_id = ? AND responder_id = ?", bridge.ID, userID).
+			Assign(map[string]any{
+				"body":       body,
+				"updated_at": time.Now(),
+			}).
+			FirstOrCreate(&response).Error; err != nil {
+			return err
+		}
+		return tx.Model(&bridge).Updates(map[string]any{"status": model.BridgeStatusResponded}).Error
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to record bridge response: %w", err)
 	}
 	return s.loadBridge(bridge.ID)
 }
@@ -278,6 +305,7 @@ func (s *AdviceService) GetIncomingBridges(userID uuid.UUID, limit int) ([]model
 	var bridges []model.Bridge
 	err := s.db.Preload("Ask.User").
 		Preload("RecommendedUser").
+		Preload("Responses.Responder").
 		Where("recommended_user_id = ? AND status <> ?", userID, model.BridgeStatusDismissed).
 		Order("created_at DESC").
 		Limit(limit).
@@ -430,7 +458,10 @@ func (s *AdviceService) updateBridgeStatus(bridgeID, userID uuid.UUID, status st
 
 func (s *AdviceService) loadBridge(id uuid.UUID) (*model.Bridge, error) {
 	var bridge model.Bridge
-	if err := s.db.Preload("Ask.User").Preload("RecommendedUser").First(&bridge, "id = ?", id).Error; err != nil {
+	if err := s.db.Preload("Ask.User").
+		Preload("RecommendedUser").
+		Preload("Responses.Responder").
+		First(&bridge, "id = ?", id).Error; err != nil {
 		return nil, err
 	}
 	return &bridge, nil

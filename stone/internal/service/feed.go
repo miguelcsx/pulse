@@ -195,6 +195,7 @@ func (s *FeedService) mixAffinityAsks(userID uuid.UUID, items []FeedItem) []Feed
 	var bridges []model.Bridge
 	if err := s.db.Preload("Ask.User").
 		Preload("RecommendedUser").
+		Preload("Responses.Responder").
 		Where("recommended_user_id = ? AND status <> ?", userID, model.BridgeStatusDismissed).
 		Order("created_at DESC").
 		Limit(3).

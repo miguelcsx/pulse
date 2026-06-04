@@ -13,7 +13,7 @@ const navItems = [
   },
   {
     to: "/moments",
-    label: "Feed",
+    label: "Path",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-[22px] w-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -25,7 +25,7 @@ const navItems = [
   },
   {
     to: "/upload",
-    label: "Post",
+    label: "Moment",
     isCreate: true,
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-[22px] w-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +36,7 @@ const navItems = [
   },
   {
     to: "/discover",
-    label: "Discover",
+    label: "Signal",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="h-[22px] w-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="11" cy="11" r="8" />

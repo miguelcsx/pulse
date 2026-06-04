@@ -193,6 +193,17 @@ export interface Bridge {
   bridge_type: BridgeType;
   confidence: number;
   status: BridgeStatus;
+  responses?: BridgeResponse[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BridgeResponse {
+  id: string;
+  bridge_id: string;
+  responder_id: string;
+  responder?: User;
+  body: string;
   created_at: string;
   updated_at: string;
 }

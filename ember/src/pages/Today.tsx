@@ -29,6 +29,9 @@ export default function Today() {
   const [helpType, setHelpType] = useState<DesiredHelpType>("advice");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [responseDrafts, setResponseDrafts] = useState<Record<string, string>>(
+    {},
+  );
   const addToast = useUiStore((s) => s.addToast);
 
   useEffect(() => {
@@ -94,9 +97,15 @@ export default function Today() {
   }
 
   async function handleRespond(bridge: Bridge) {
+    const message = (responseDrafts[bridge.id] ?? "").trim();
+    if (message.length < 8) {
+      addToast("Add a short perspective first", "error");
+      return;
+    }
     try {
-      const updated = await respondBridge(bridge.id);
+      const updated = await respondBridge(bridge.id, message);
       updateBridge(updated);
+      setResponseDrafts((prev) => ({ ...prev, [bridge.id]: "" }));
       addToast("Perspective offered", "success");
     } catch {
       addToast("Failed to offer perspective", "error");
@@ -215,6 +224,7 @@ export default function Today() {
           {incomingBridges.map((bridge) => {
             const asker = bridge.ask?.user;
             const isResponded = bridge.status === "responded";
+            const response = bridge.responses?.[0];
 
             return (
               <article
@@ -247,16 +257,43 @@ export default function Today() {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 flex justify-end">
-                  <Button
-                    size="sm"
-                    variant={isResponded ? "secondary" : "accent"}
-                    onClick={() => handleRespond(bridge)}
-                    disabled={isResponded}
-                  >
-                    {isResponded ? "Perspective offered" : "Offer perspective"}
-                  </Button>
-                </div>
+                {response ? (
+                  <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+                      Your perspective
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+                      {response.body}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    <textarea
+                      value={responseDrafts[bridge.id] ?? ""}
+                      onChange={(e) =>
+                        setResponseDrafts((prev) => ({
+                          ...prev,
+                          [bridge.id]: e.target.value,
+                        }))
+                      }
+                      placeholder="Share the one thing you would tell them..."
+                      maxLength={1200}
+                      className="min-h-20 w-full resize-none rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm leading-relaxed outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)]"
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant={isResponded ? "secondary" : "accent"}
+                        onClick={() => handleRespond(bridge)}
+                        disabled={isResponded}
+                      >
+                        {isResponded
+                          ? "Perspective offered"
+                          : "Offer perspective"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </article>
             );
           })}

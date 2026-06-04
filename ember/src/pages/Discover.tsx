@@ -8,7 +8,7 @@ import { usePageTitle } from "../hooks/usePageTitle";
 import { useUiStore } from "../store/uiStore";
 
 export default function Discover() {
-  usePageTitle("Discover");
+  usePageTitle("Signal");
   const [data, setData] = useState<TodayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const addToast = useUiStore((s) => s.addToast);
@@ -41,17 +41,23 @@ export default function Discover() {
     <div className="space-y-8 pb-4">
       {/* Header */}
       <section className="pt-4">
-        <h1 className="text-[28px] font-semibold tracking-tight">Discover</h1>
+        <h1 className="text-[28px] font-semibold tracking-tight">
+          Signal map
+        </h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Your network built from asks and help, not followers.
+          A compact view of the people Pulse can route through your asks,
+          moments, and lived context.
         </p>
       </section>
 
       {/* Stats */}
       <section className="grid grid-cols-2 gap-3">
         {[
-          { value: bridges.length, label: "Bridges" },
-          { value: data?.trust_profile?.helped_count ?? 0, label: "Helped" },
+          { value: bridges.length, label: "Open bridges" },
+          {
+            value: data?.incoming_bridges?.length ?? 0,
+            label: "Need your context",
+          },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -67,11 +73,12 @@ export default function Discover() {
 
       {/* Bridges */}
       <section className="space-y-3">
-        <h2 className="text-[17px] font-semibold">Bridges</h2>
+        <h2 className="text-[17px] font-semibold">Bridge candidates</h2>
         {bridges.length === 0 ? (
           <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center">
             <p className="text-sm text-[var(--color-text-muted)] mb-3">
-              No bridges yet. Start by asking a question.
+              No bridge candidates yet. Start by asking a question or sharing a
+              moment with tags.
             </p>
             <Link
               to="/"

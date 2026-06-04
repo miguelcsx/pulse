@@ -82,7 +82,8 @@ export default function Paths() {
       <h2 className="text-lg font-semibold">Paths</h2>
       {paths.length === 0 ? (
         <p className="text-[var(--color-text-muted)] text-sm">
-          No paths yet. Paths are generated automatically from trending tags.
+          No curated paths yet. Pulse still builds a live affinity path from
+          moments, asks, and responses.
         </p>
       ) : (
         <>
@@ -100,7 +101,7 @@ export default function Paths() {
               )}
               <div className="flex items-center gap-4 mt-2 text-xs text-[var(--color-text-muted)]">
                 <span>{path.items?.length || 0} items</span>
-                <span>{path.follower_count} followers</span>
+                <span>{path.follower_count} people on this path</span>
                 <span>by {path.creator?.display_name}</span>
               </div>
             </Link>
