@@ -79,7 +79,13 @@ export default function Paths() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Paths</h2>
+      <div>
+        <h2 className="text-lg font-semibold">Relationship trails</h2>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          Curated sequences that keep old moments connected to people and
+          context.
+        </p>
+      </div>
       {paths.length === 0 ? (
         <p className="text-[var(--color-text-muted)] text-sm">
           No curated paths yet. Pulse still builds a live affinity path from

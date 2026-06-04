@@ -108,7 +108,11 @@ export default function Today() {
         latest_ask: res.ask,
         bridges: res.bridges,
         incoming_bridges: prev?.incoming_bridges ?? [],
+        perspective_inbox: prev?.perspective_inbox ?? [],
+        response_receipts: prev?.response_receipts ?? [],
         help_sessions: prev?.help_sessions ?? [],
+        shared_rooms: prev?.shared_rooms ?? [],
+        relationship_trails: prev?.relationship_trails ?? [],
         trust_profile: prev?.trust_profile,
         starter_prompts: prev?.starter_prompts ?? [],
       }));
@@ -205,6 +209,10 @@ export default function Today() {
 
   const bridges = data?.bridges ?? [];
   const incomingBridges = data?.incoming_bridges ?? [];
+  const perspectiveInbox = data?.perspective_inbox ?? [];
+  const responseReceipts = data?.response_receipts ?? [];
+  const sharedRooms = data?.shared_rooms ?? [];
+  const relationshipTrails = data?.relationship_trails ?? [];
   const starterPrompts = data?.starter_prompts ?? [];
   const trustProfile = data?.trust_profile;
   const latestAsk = data?.latest_ask;
@@ -232,6 +240,29 @@ export default function Today() {
         </p>
       </section>
 
+      {/* Affinity itinerary */}
+      <section className="grid gap-2 sm:grid-cols-4">
+        {[
+          { label: "Moments", value: pathItems.length, to: "#path" },
+          { label: "Inbox", value: perspectiveInbox.length, to: "#inbox" },
+          { label: "Rooms", value: sharedRooms.length, to: "#rooms" },
+          { label: "Trails", value: relationshipTrails.length, to: "#trails" },
+        ].map((step) => (
+          <a
+            key={step.label}
+            href={step.to}
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-3 transition-colors hover:bg-[var(--color-surface)]"
+          >
+            <span className="block text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              {step.label}
+            </span>
+            <span className="mt-1 block text-xl font-semibold">
+              {step.value}
+            </span>
+          </a>
+        ))}
+      </section>
+
       {/* Ask box */}
       <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -249,6 +280,7 @@ export default function Today() {
           </Link>
         </div>
         <textarea
+          name="ask-question"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="What do you need a human perspective on?"
@@ -311,7 +343,7 @@ export default function Today() {
       </section>
 
       {/* Live affinity path */}
-      <section className="space-y-3">
+      <section id="path" className="space-y-3 scroll-mt-20">
         <div className="flex items-end justify-between gap-4">
           <div>
             <h2 className="text-[17px] font-semibold">Next in your path</h2>
@@ -350,10 +382,22 @@ export default function Today() {
                       compact
                     />
                   ) : moment ? (
-                    <FeedCard
-                      content={moment}
-                      onClick={() => setSelectedMoment(moment)}
-                    />
+                    <div className="space-y-2">
+                      {(item.path_hint || item.reason) && (
+                        <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--color-text-muted)]">
+                          {item.path_hint && (
+                            <span className="rounded-full bg-[var(--color-surface)] px-2 py-1 font-medium text-[var(--color-text-secondary)]">
+                              {item.path_hint}
+                            </span>
+                          )}
+                          {item.reason && <span>{item.reason}</span>}
+                        </div>
+                      )}
+                      <FeedCard
+                        content={moment}
+                        onClick={() => setSelectedMoment(moment)}
+                      />
+                    </div>
                   ) : null}
                 </Fragment>
               );
@@ -392,6 +436,27 @@ export default function Today() {
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Perspective inbox — directed context that should not feel empty */}
+      {perspectiveInbox.length > 0 && (
+        <section id="inbox" className="space-y-3 scroll-mt-20">
+          <div>
+            <h2 className="text-[17px] font-semibold">Perspective inbox</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Open asks routed to you because your graph has nearby lived
+              context.
+            </p>
+          </div>
+          {perspectiveInbox.map((bridge) => (
+            <AskPathCard
+              key={bridge.id}
+              bridge={bridge}
+              onUpdate={updateBridge}
+              compact
+            />
+          ))}
         </section>
       )}
 
@@ -450,6 +515,47 @@ export default function Today() {
               <span className="text-xs">View →</span>
             </Link>
           )}
+        </section>
+      )}
+
+      {/* Response receipts */}
+      {responseReceipts.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[17px] font-semibold">Response receipts</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Proof that your perspective landed, without turning it into likes.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {responseReceipts.map((receipt) => (
+              <article
+                key={receipt.bridge_id}
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">
+                      {receipt.user.display_name || receipt.user.handle}
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                      {receipt.question}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    {receipt.signals.map((signal) => (
+                      <span
+                        key={signal}
+                        className="rounded-full bg-[var(--color-surface)] px-2 py-1 text-[11px] font-medium text-[var(--color-success)]"
+                      >
+                        {signal.replace("_", " ")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
@@ -514,6 +620,7 @@ export default function Today() {
                 ) : (
                   <div className="mt-4 space-y-3">
                     <textarea
+                      name={`perspective-${bridge.id}`}
                       value={responseDrafts[bridge.id] ?? ""}
                       onChange={(e) =>
                         setResponseDrafts((prev) => ({
@@ -539,6 +646,72 @@ export default function Today() {
               </article>
             );
           })}
+        </section>
+      )}
+
+      {/* Shared context rooms */}
+      {sharedRooms.length > 0 && (
+        <section id="rooms" className="space-y-3 scroll-mt-20">
+          <div>
+            <h2 className="text-[17px] font-semibold">Shared context rooms</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Temporary rooms where the graph has enough nearby people to make
+              the next answer easier.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {sharedRooms.map((room) => (
+              <div
+                key={room.id}
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 transition-colors hover:bg-[var(--color-surface)]"
+              >
+                <p className="text-sm font-semibold">{room.title}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                  {room.description}
+                </p>
+                <p className="mt-3 text-xs font-medium text-[var(--color-accent)]">
+                  {room.member_count} nearby
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Paths as relationship trails */}
+      {relationshipTrails.length > 0 && (
+        <section id="trails" className="space-y-3 scroll-mt-20">
+          <div>
+            <h2 className="text-[17px] font-semibold">
+              Relationship trails
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Paths followed by you or people close to you, so old moments can
+              keep carrying context.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {relationshipTrails.map((path) => (
+              <Link
+                key={path.id}
+                to={`/paths/${path.id}`}
+                className="flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 transition-colors hover:bg-[var(--color-surface)]"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    {path.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-[var(--color-text-muted)]">
+                    {path.items?.length ?? 0} moments by{" "}
+                    {path.creator?.display_name || path.creator?.handle}
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-medium text-[var(--color-accent)]">
+                  Open
+                </span>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

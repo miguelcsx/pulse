@@ -39,12 +39,24 @@ type HelpSignalInput struct {
 }
 
 type TodayResult struct {
-	LatestAsk       *model.Ask          `json:"latest_ask,omitempty"`
-	Bridges         []model.Bridge      `json:"bridges"`
-	IncomingBridges []model.Bridge      `json:"incoming_bridges"`
-	HelpSessions    []model.HelpSession `json:"help_sessions"`
-	TrustProfile    *model.TrustProfile `json:"trust_profile,omitempty"`
-	StarterPrompts  []string            `json:"starter_prompts"`
+	LatestAsk          *model.Ask          `json:"latest_ask,omitempty"`
+	Bridges            []model.Bridge      `json:"bridges"`
+	IncomingBridges    []model.Bridge      `json:"incoming_bridges"`
+	PerspectiveInbox   []model.Bridge      `json:"perspective_inbox"`
+	ResponseReceipts   []ResponseReceipt   `json:"response_receipts"`
+	HelpSessions       []model.HelpSession `json:"help_sessions"`
+	SharedRooms        []model.HelpSession `json:"shared_rooms"`
+	RelationshipTrails []model.Path        `json:"relationship_trails"`
+	TrustProfile       *model.TrustProfile `json:"trust_profile,omitempty"`
+	StarterPrompts     []string            `json:"starter_prompts"`
+}
+
+type ResponseReceipt struct {
+	BridgeID uuid.UUID  `json:"bridge_id"`
+	User     model.User `json:"user"`
+	Question string     `json:"question"`
+	Signals  []string   `json:"signals"`
+	LastAt   time.Time  `json:"last_at"`
 }
 
 type AdviceService struct {
@@ -344,9 +356,13 @@ func (s *AdviceService) GetTrustProfile(userID uuid.UUID) (*model.TrustProfile, 
 
 func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 	result := &TodayResult{
-		Bridges:         []model.Bridge{},
-		IncomingBridges: []model.Bridge{},
-		HelpSessions:    []model.HelpSession{},
+		Bridges:            []model.Bridge{},
+		IncomingBridges:    []model.Bridge{},
+		PerspectiveInbox:   []model.Bridge{},
+		ResponseReceipts:   []ResponseReceipt{},
+		HelpSessions:       []model.HelpSession{},
+		SharedRooms:        []model.HelpSession{},
+		RelationshipTrails: []model.Path{},
 		StarterPrompts: []string{
 			"I'm stuck getting my first 10 users.",
 			"I need a peer to review my launch plan.",
@@ -363,6 +379,13 @@ func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 
 	incoming, _ := s.GetIncomingBridges(userID, 8)
 	result.IncomingBridges = incoming
+	result.PerspectiveInbox = unansweredBridges(incoming)
+	result.ResponseReceipts = s.responseReceipts(userID, 6)
+	if sessions, err := s.ListHelpSessions(userID); err == nil {
+		result.HelpSessions = sessions
+		result.SharedRooms = takeHelpSessions(sessions, 4)
+	}
+	result.RelationshipTrails = s.relationshipTrails(userID, 4)
 
 	if profile, err := s.GetTrustProfile(userID); err == nil {
 		result.TrustProfile = profile
@@ -508,11 +531,16 @@ func (s *AdviceService) UpdateAskVisibility(askID, userID uuid.UUID, input AskVi
 // NetworkConnection is one person you've actually exchanged perspective with —
 // either they answered your ask, or you answered theirs.
 type NetworkConnection struct {
-	User      model.User `json:"user"`
-	Direction string     `json:"direction"` // "you_asked" | "you_answered" | "connected" | "nearby"
-	Topic     string     `json:"topic"`
-	Question  string     `json:"question"`
-	LastAt    time.Time  `json:"last_at"`
+	User        model.User   `json:"user"`
+	Direction   string       `json:"direction"` // "you_asked" | "you_answered" | "connected" | "nearby"
+	Topic       string       `json:"topic"`
+	Question    string       `json:"question"`
+	Where       string       `json:"where"`
+	ContextTags []string     `json:"context_tags"`
+	Affinity    float64      `json:"affinity"`
+	ActiveRoom  *RoomContext `json:"active_room,omitempty"`
+	SharedPath  *model.Path  `json:"shared_path,omitempty"`
+	LastAt      time.Time    `json:"last_at"`
 }
 
 // GetNetwork returns the people you've connected with through real exchanges,
@@ -535,12 +563,18 @@ func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error
 			continue
 		}
 		seen[b.RecommendedUserID] = true
+		where, tags, room, path, affinity := s.networkContext(userID, b.RecommendedUserID)
 		connections = append(connections, NetworkConnection{
-			User:      b.RecommendedUser,
-			Direction: "you_asked",
-			Topic:     b.Ask.Topic,
-			Question:  b.Ask.Question,
-			LastAt:    b.UpdatedAt,
+			User:        b.RecommendedUser,
+			Direction:   "you_asked",
+			Topic:       b.Ask.Topic,
+			Question:    b.Ask.Question,
+			Where:       where,
+			ContextTags: tags,
+			Affinity:    affinity,
+			ActiveRoom:  room,
+			SharedPath:  path,
+			LastAt:      b.UpdatedAt,
 		})
 	}
 
@@ -558,12 +592,18 @@ func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error
 			continue
 		}
 		seen[asker.ID] = true
+		where, tags, room, path, affinity := s.networkContext(userID, asker.ID)
 		connections = append(connections, NetworkConnection{
-			User:      asker,
-			Direction: "you_answered",
-			Topic:     b.Ask.Topic,
-			Question:  b.Ask.Question,
-			LastAt:    b.UpdatedAt,
+			User:        asker,
+			Direction:   "you_answered",
+			Topic:       b.Ask.Topic,
+			Question:    b.Ask.Question,
+			Where:       where,
+			ContextTags: tags,
+			Affinity:    affinity,
+			ActiveRoom:  room,
+			SharedPath:  path,
+			LastAt:      b.UpdatedAt,
 		})
 	}
 
@@ -582,12 +622,18 @@ func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error
 			continue
 		}
 		seen[follow.FolloweeID] = true
+		where, tags, room, path, affinity := s.networkContext(userID, follow.FolloweeID)
 		connections = append(connections, NetworkConnection{
-			User:      follow.Followee,
-			Direction: "connected",
-			Topic:     "connected",
-			Question:  s.latestUserContext(follow.FolloweeID),
-			LastAt:    follow.CreatedAt,
+			User:        follow.Followee,
+			Direction:   "connected",
+			Topic:       "connected",
+			Question:    where,
+			Where:       where,
+			ContextTags: tags,
+			Affinity:    affinity,
+			ActiveRoom:  room,
+			SharedPath:  path,
+			LastAt:      follow.CreatedAt,
 		})
 	}
 
@@ -615,12 +661,21 @@ func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error
 			continue
 		}
 		seen[edge.OtherUserID] = true
+		where, tags, room, path, affinity := s.networkContext(userID, edge.OtherUserID)
+		if affinity == 0 {
+			affinity = edge.Score7D
+		}
 		connections = append(connections, NetworkConnection{
-			User:      user,
-			Direction: "nearby",
-			Topic:     "nearby",
-			Question:  fmt.Sprintf("Close by recent moments and reactions · %.0f%% affinity", edge.Score7D*100),
-			LastAt:    edge.LastSignalAt,
+			User:        user,
+			Direction:   "nearby",
+			Topic:       "nearby",
+			Question:    where,
+			Where:       where,
+			ContextTags: tags,
+			Affinity:    affinity,
+			ActiveRoom:  room,
+			SharedPath:  path,
+			LastAt:      edge.LastSignalAt,
 		})
 	}
 
@@ -649,6 +704,227 @@ func (s *AdviceService) latestUserContext(userID uuid.UUID) string {
 		return content.Body
 	}
 	return "Recent moment in your graph"
+}
+
+func unansweredBridges(bridges []model.Bridge) []model.Bridge {
+	out := make([]model.Bridge, 0, len(bridges))
+	for _, bridge := range bridges {
+		if len(bridge.Responses) == 0 {
+			out = append(out, bridge)
+		}
+	}
+	return out
+}
+
+func takeHelpSessions(sessions []model.HelpSession, limit int) []model.HelpSession {
+	if limit <= 0 || len(sessions) <= limit {
+		return sessions
+	}
+	return sessions[:limit]
+}
+
+func (s *AdviceService) responseReceipts(userID uuid.UUID, limit int) []ResponseReceipt {
+	if limit <= 0 {
+		limit = 6
+	}
+
+	type row struct {
+		BridgeID uuid.UUID `gorm:"column:bridge_id"`
+		Signal   string    `gorm:"column:signal"`
+		LastAt   time.Time `gorm:"column:last_at"`
+	}
+	var rows []row
+	if err := s.db.Raw(`
+		SELECT hs.bridge_id, hs.kind AS signal, hs.created_at AS last_at
+		FROM help_signals hs
+		JOIN bridges b ON b.id = hs.bridge_id
+		WHERE b.recommended_user_id = ? AND hs.kind <> 'not_relevant'
+		ORDER BY hs.created_at DESC
+		LIMIT ?
+	`, userID, limit*3).Scan(&rows).Error; err != nil || len(rows) == 0 {
+		return []ResponseReceipt{}
+	}
+
+	bridgeIDs := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		bridgeIDs = append(bridgeIDs, row.BridgeID)
+	}
+
+	var bridges []model.Bridge
+	if err := s.db.Preload("Ask.User").
+		Where("id IN ?", bridgeIDs).
+		Find(&bridges).Error; err != nil {
+		return []ResponseReceipt{}
+	}
+
+	byID := make(map[uuid.UUID]model.Bridge, len(bridges))
+	for _, bridge := range bridges {
+		byID[bridge.ID] = bridge
+	}
+
+	out := make([]ResponseReceipt, 0, limit)
+	seen := map[uuid.UUID]int{}
+	for _, row := range rows {
+		bridge, ok := byID[row.BridgeID]
+		if !ok {
+			continue
+		}
+		if idx, exists := seen[row.BridgeID]; exists {
+			out[idx].Signals = appendUniqueString(out[idx].Signals, row.Signal)
+			if row.LastAt.After(out[idx].LastAt) {
+				out[idx].LastAt = row.LastAt
+			}
+			continue
+		}
+		seen[row.BridgeID] = len(out)
+		out = append(out, ResponseReceipt{
+			BridgeID: bridge.ID,
+			User:     bridge.Ask.User,
+			Question: bridge.Ask.Question,
+			Signals:  []string{row.Signal},
+			LastAt:   row.LastAt,
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func (s *AdviceService) relationshipTrails(userID uuid.UUID, limit int) []model.Path {
+	if limit <= 0 {
+		limit = 4
+	}
+	var paths []model.Path
+	err := s.db.Preload("Creator").
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position ASC") }).
+		Preload("Items.Content.Creator").
+		Preload("Items.Content.Tags").
+		Where(`
+			id IN (
+				SELECT path_id FROM path_follows WHERE user_id = ?
+				UNION
+				SELECT pf.path_id FROM path_follows pf
+				JOIN follows f ON f.followee_id = pf.user_id
+				WHERE f.follower_id = ?
+				UNION
+				SELECT id FROM paths
+				WHERE creator_id IN (SELECT followee_id FROM follows WHERE follower_id = ?)
+			)
+		`, userID, userID, userID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&paths).Error
+	if err != nil {
+		return []model.Path{}
+	}
+	return paths
+}
+
+func (s *AdviceService) networkContext(userID, otherID uuid.UUID) (string, []string, *RoomContext, *model.Path, float64) {
+	tags := s.latestUserTags(otherID, 4)
+	where := s.latestUserContext(otherID)
+	room := s.activeRoomForUser(otherID)
+	path := s.sharedPathForUsers(userID, otherID)
+	affinity := s.affinityScore(userID, otherID)
+
+	if room != nil && len(room.Tags) > 0 {
+		where = "Live in a shared context around " + formatHashTags(room.Tags)
+	} else if path != nil {
+		where = "On the relationship trail " + path.Title
+	}
+	return where, tags, room, path, affinity
+}
+
+func (s *AdviceService) latestUserTags(userID uuid.UUID, limit int) []string {
+	if limit <= 0 {
+		limit = 4
+	}
+	type row struct {
+		Name string `gorm:"column:name"`
+	}
+	var rows []row
+	if err := s.db.Raw(`
+		SELECT t.name
+		FROM tags t
+		JOIN content_tags ct ON ct.tag_id = t.id
+		JOIN contents c ON c.id = ct.content_id
+		WHERE c.creator_id = ?
+		GROUP BY t.id, t.name
+		ORDER BY MAX(c.created_at) DESC
+		LIMIT ?
+	`, userID, limit).Scan(&rows).Error; err != nil {
+		return []string{}
+	}
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.Name != "" {
+			out = append(out, row.Name)
+		}
+	}
+	return out
+}
+
+func (s *AdviceService) activeRoomForUser(userID uuid.UUID) *RoomContext {
+	var room model.Room
+	if err := s.db.Preload("Tags").
+		Where("expires_at > ?", time.Now()).
+		Where("id IN (SELECT room_id FROM room_members WHERE user_id = ?)", userID).
+		Order("created_at DESC").
+		First(&room).Error; err != nil {
+		return nil
+	}
+
+	var memberCount int64
+	s.db.Model(&model.RoomMember{}).Where("room_id = ?", room.ID).Count(&memberCount)
+	tags := make([]string, 0, len(room.Tags))
+	for _, tag := range room.Tags {
+		tags = append(tags, tag.Name)
+	}
+	return &RoomContext{RoomID: room.ID, Tags: tags, MemberCount: memberCount}
+}
+
+func (s *AdviceService) sharedPathForUsers(userID, otherID uuid.UUID) *model.Path {
+	var path model.Path
+	err := s.db.Preload("Creator").
+		Preload("Items", func(db *gorm.DB) *gorm.DB { return db.Order("position ASC") }).
+		Preload("Items.Content.Creator").
+		Preload("Items.Content.Tags").
+		Where(`
+			id IN (
+				SELECT mine.path_id
+				FROM path_follows mine
+				JOIN path_follows theirs ON theirs.path_id = mine.path_id
+				WHERE mine.user_id = ? AND theirs.user_id = ?
+				UNION
+				SELECT id FROM paths
+				WHERE creator_id = ?
+				AND id IN (SELECT path_id FROM path_follows WHERE user_id = ?)
+			)
+		`, userID, otherID, otherID, userID).
+		Order("created_at DESC").
+		First(&path).Error
+	if err != nil {
+		return nil
+	}
+	return &path
+}
+
+func (s *AdviceService) affinityScore(userID, otherID uuid.UUID) float64 {
+	var edge model.UserAffinityEdge
+	if err := s.db.First(&edge, "user_id = ? AND other_user_id = ?", userID, otherID).Error; err != nil {
+		return 0
+	}
+	return edge.Score7D
+}
+
+func appendUniqueString(items []string, value string) []string {
+	for _, item := range items {
+		if item == value {
+			return items
+		}
+	}
+	return append(items, value)
 }
 
 func (s *AdviceService) ListHelpSessions(userID uuid.UUID) ([]model.HelpSession, error) {

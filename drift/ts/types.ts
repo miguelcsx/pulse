@@ -130,6 +130,8 @@ export interface AffinityFeedItem {
   bridge?: Bridge;
   room_context?: RoomContext;
   reason?: string;
+  path_hint?: string;
+  seen_before?: boolean;
   created_at: string;
 }
 
@@ -190,9 +192,14 @@ export interface CommonsEntry {
 // NetworkConnection — a person you've actually exchanged perspective with.
 export interface NetworkConnection {
   user: User;
-  direction: "you_asked" | "you_answered";
+  direction: "you_asked" | "you_answered" | "connected" | "nearby";
   topic: string;
   question: string;
+  where: string;
+  context_tags: string[];
+  affinity: number;
+  active_room?: RoomContext;
+  shared_path?: Path;
   last_at: string;
 }
 
@@ -243,6 +250,14 @@ export interface HelpSignal {
   created_at: string;
 }
 
+export interface ResponseReceipt {
+  bridge_id: string;
+  user: User;
+  question: string;
+  signals: HelpSignalKind[];
+  last_at: string;
+}
+
 export interface TrustProfile {
   user_id: string;
   user?: User;
@@ -275,7 +290,11 @@ export interface TodayResponse {
   latest_ask?: Ask;
   bridges: Bridge[];
   incoming_bridges: Bridge[];
+  perspective_inbox: Bridge[];
+  response_receipts: ResponseReceipt[];
   help_sessions: HelpSession[];
+  shared_rooms: HelpSession[];
+  relationship_trails: Path[];
   trust_profile?: TrustProfile;
   starter_prompts: string[];
 }

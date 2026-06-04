@@ -7,22 +7,30 @@ import Spinner from "../components/ui/Spinner";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useUiStore } from "../store/uiStore";
 
+type NetworkDirection = "you_asked" | "you_answered" | "connected" | "nearby";
+
 function PersonRow({
   user,
   meta,
   metaTone,
   subtitle,
+  contextTags = [],
+  affinity = 0,
+  activeRoom,
+  sharedPath,
 }: {
   user: Pick<User, "id" | "handle" | "display_name">;
   meta?: string;
   metaTone?: string;
   subtitle?: string;
+  contextTags?: string[];
+  affinity?: number;
+  activeRoom?: NetworkConnection["active_room"];
+  sharedPath?: NetworkConnection["shared_path"];
 }) {
   return (
-    <Link
-      to={`/profile/${user.id}`}
-      className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 transition-colors hover:bg-[var(--color-surface)]"
-    >
+    <article className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 transition-colors hover:bg-[var(--color-surface)]">
+      <Link to={`/profile/${user.id}`} className="flex items-start gap-3">
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-active)] text-sm font-semibold text-[var(--color-text-secondary)]">
         {user.display_name?.[0] || user.handle?.[0] || "?"}
       </div>
@@ -41,7 +49,47 @@ function PersonRow({
           {subtitle ?? `@${user.handle}`}
         </p>
       </div>
-    </Link>
+      </Link>
+      {(contextTags.length > 0 || activeRoom || sharedPath || affinity > 0) && (
+        <div className="mt-3 space-y-2 pl-14">
+          {contextTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {contextTags.slice(0, 4).map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)]"
+                >
+                  #{tag.replace(/^#/, "")}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 text-[11px] text-[var(--color-text-muted)]">
+            {activeRoom && (
+              <Link
+                to="/#rooms"
+                className="rounded-full bg-[var(--color-accent-subtle)] px-2 py-1 font-medium text-[var(--color-accent)]"
+              >
+                room · {activeRoom.member_count} nearby
+              </Link>
+            )}
+            {sharedPath && (
+              <Link
+                to={`/paths/${sharedPath.id}`}
+                className="rounded-full bg-[var(--color-surface)] px-2 py-1 font-medium text-[var(--color-text-secondary)]"
+              >
+                trail · {sharedPath.title}
+              </Link>
+            )}
+            {affinity > 0 && (
+              <span className="rounded-full bg-[var(--color-surface)] px-2 py-1">
+                {Math.round(affinity * 100)}% affinity
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -85,6 +133,7 @@ function PeopleSearch() {
           </svg>
         </span>
         <input
+          name="people-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Find someone by name or @handle"
@@ -111,7 +160,7 @@ function PeopleSearch() {
   );
 }
 
-function directionCopy(direction: NetworkConnection["direction"]): {
+function directionCopy(direction: NetworkDirection): {
   label: string;
   tone: string;
 } {
@@ -159,6 +208,23 @@ export default function Network() {
     );
   }
 
+  const proximity = connections.filter(
+    (c) =>
+      (c.direction as NetworkDirection) === "connected" ||
+      (c.direction as NetworkDirection) === "nearby",
+  );
+  const exchanges = connections.filter(
+    (c) =>
+      (c.direction as NetworkDirection) === "you_asked" ||
+      (c.direction as NetworkDirection) === "you_answered",
+  );
+  const rows = proximity.length > 0 || exchanges.length > 0
+    ? [
+        { title: "Friend proximity", items: proximity },
+        { title: "Perspective exchanges", items: exchanges },
+      ].filter((section) => section.items.length > 0)
+    : [{ title: "Your connections", items: connections }];
+
   return (
     <div className="space-y-6 pb-4">
       <section className="pt-4">
@@ -171,11 +237,8 @@ export default function Network() {
 
       <PeopleSearch />
 
-      <section className="space-y-3">
-        <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-          Your connections
-        </h2>
-        {connections.length === 0 ? (
+      {connections.length === 0 ? (
+        <section className="space-y-3">
           <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-8 text-center">
             <p className="text-sm text-[var(--color-text-muted)]">
               Your network grows from moments, follows, reactions, asks, and
@@ -188,23 +251,34 @@ export default function Network() {
               Ask something
             </Link>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {connections.map((c) => {
-              const copy = directionCopy(c.direction);
-              return (
-                <PersonRow
-                  key={`${c.user.id}-${c.direction}`}
-                  user={c.user}
-                  meta={copy.label}
-                  metaTone={copy.tone}
-                  subtitle={c.question}
-                />
-              );
-            })}
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        rows.map((section) => (
+          <section key={section.title} className="space-y-3">
+            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              {section.title}
+            </h2>
+            <div className="space-y-2">
+              {section.items.map((c) => {
+                const copy = directionCopy(c.direction as NetworkDirection);
+                return (
+                  <PersonRow
+                    key={`${c.user.id}-${c.direction}`}
+                    user={c.user}
+                    meta={copy.label}
+                    metaTone={copy.tone}
+                    subtitle={c.where || c.question}
+                    contextTags={c.context_tags}
+                    affinity={c.affinity}
+                    activeRoom={c.active_room}
+                    sharedPath={c.shared_path}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ))
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -115,6 +116,11 @@ func Load() (*Config, error) {
 	cfg.Env = strings.ToLower(strings.TrimSpace(cfg.Env))
 	if cfg.Env == "" {
 		cfg.Env = "development"
+	}
+	if cfg.Env == "development" {
+		if _, explicitlySet := os.LookupEnv("DEMO_AUTH_ENABLED"); !explicitlySet {
+			cfg.DemoAuthEnabled = true
+		}
 	}
 
 	cfg.APIBasePath = normalizeURLPath(cfg.APIBasePath, "/api/v1")

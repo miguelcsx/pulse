@@ -36,13 +36,15 @@ type FeedItem struct {
 	Bridge      *model.Bridge  `json:"bridge,omitempty"`
 	RoomContext *RoomContext   `json:"room_context,omitempty"`
 	Reason      string         `json:"reason,omitempty"`
+	PathHint    string         `json:"path_hint,omitempty"`
+	SeenBefore  bool           `json:"seen_before,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 }
 
 type scoredContent struct {
 	model.Content
 	score float64
-	tier  int // 1=primary, 2=discovery, 3=trending
+	tier  int // 1=primary, 2=discovery, 3=trending, 4=resurfacing
 }
 
 // FeedService provides the main content feed using a three-tier scoring pipeline:
@@ -104,24 +106,31 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 	// Tier 3: trending backfill (cold-start safety net)
 	allExcludeIDs := append(primaryIDs, extractContentIDs(discoveryCandidates)...)
 	trendingCandidates := s.fetchTrendingBackfill(userID, needed, allExcludeIDs)
+	resurfacingExcludeIDs := append(allExcludeIDs, extractContentIDs(trendingCandidates)...)
+	resurfacingCandidates := s.fetchResurfacingCandidates(userID, maxInt(1, needed/5), resurfacingExcludeIDs)
 
 	// Batch-load affinity scores for all candidate creators
-	creatorIDs := collectCreatorIDs(primaryCandidates, discoveryCandidates, trendingCandidates)
+	creatorIDs := collectCreatorIDs(primaryCandidates, discoveryCandidates, trendingCandidates, resurfacingCandidates)
 	affinityMap := s.loadAffinityScores(userID, creatorIDs)
 	followedSet := s.loadFollowedSet(userID)
 
 	// Batch-load reaction counts for scoring
-	allContentIDs := collectContentIDs(primaryCandidates, discoveryCandidates, trendingCandidates)
+	allContentIDs := collectContentIDs(primaryCandidates, discoveryCandidates, trendingCandidates, resurfacingCandidates)
 	reactionCounts := s.loadReactionCounts(allContentIDs)
 
 	// Score each tier
 	scoredPrimary := s.scoreSlice(primaryCandidates, affinityMap, followedSet, reactionCounts, now, 1)
 	scoredDiscovery := s.scoreSlice(discoveryCandidates, affinityMap, followedSet, reactionCounts, now, 2)
 	scoredTrending := s.scoreSlice(trendingCandidates, affinityMap, followedSet, reactionCounts, now, 3)
+	scoredResurfacing := s.scoreSlice(resurfacingCandidates, affinityMap, followedSet, reactionCounts, now, 4)
+	for i := range scoredResurfacing {
+		scoredResurfacing[i].score += 0.08
+	}
 
 	sortScored(scoredPrimary)
 	sortScored(scoredDiscovery)
 	sortScored(scoredTrending)
+	sortScored(scoredResurfacing)
 
 	// Enforce mix ratio: ~70% primary, ~30% discovery, trending fills gaps
 	primaryTarget := int(math.Ceil(float64(needed) * (1 - s.cfg.FeedDiscoveryRatio)))
@@ -137,6 +146,7 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 	if totalShortfall > 0 {
 		merged = append(merged, takeN(scoredTrending, totalShortfall)...)
 	}
+	merged = append(merged, takeN(scoredResurfacing, maxInt(1, needed/5))...)
 
 	// Final sort by score, then apply diversity penalty
 	sortScored(merged)
@@ -169,6 +179,7 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 	}
 
 	roomMap := s.enrichWithRoomContext(contents)
+	seenMap := s.loadSeenContent(userID, collectContentIDs(contents))
 
 	items := make([]FeedItem, 0, len(contents)+3)
 	for i, c := range contents {
@@ -178,6 +189,9 @@ func (s *FeedService) GetFeed(userID uuid.UUID, cursor string, limit int) ([]Fee
 			UnitType:    FeedUnitMoment,
 			Content:     &content,
 			RoomContext: roomMap[c.ID],
+			Reason:      s.momentBridgeReason(userID, content, roomMap[c.ID], seenMap[c.ID]),
+			PathHint:    pathHintForContent(content, roomMap[c.ID], seenMap[c.ID]),
+			SeenBefore:  seenMap[c.ID],
 			CreatedAt:   c.CreatedAt,
 		})
 	}
@@ -228,6 +242,7 @@ func bridgeFeedItem(bridge model.Bridge) FeedItem {
 		UnitType:  FeedUnitAsk,
 		Bridge:    &bridge,
 		Reason:    bridge.Reason,
+		PathHint:  "Offer perspective",
 		CreatedAt: bridge.CreatedAt,
 	}
 }
@@ -305,6 +320,48 @@ func (s *FeedService) fetchTrendingBackfill(userID uuid.UUID, limit int, exclude
 		)`, userID).
 		Where(`created_at > ?`, time.Now().Add(-s.cfg.FeedTrendingMaxAge)).
 		Order("created_at DESC").
+		Limit(limit)
+
+	if len(excludeIDs) > 0 {
+		query = query.Where("id NOT IN ?", excludeIDs)
+	}
+
+	query.Find(&contents)
+	return contents
+}
+
+// fetchResurfacingCandidates brings durable older moments back into the path
+// when they still overlap the user's current graph. This prevents old posts
+// from becoming dead inventory while avoiding blind repetition.
+func (s *FeedService) fetchResurfacingCandidates(userID uuid.UUID, limit int, excludeIDs []uuid.UUID) []model.Content {
+	var contents []model.Content
+	query := s.db.Preload("Creator").Preload("Tags").
+		Where(`creator_id != ?`, userID).
+		Where(`created_at < ?`, time.Now().Add(-7*24*time.Hour)).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = contents.creator_id
+		)`, userID).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = contents.creator_id
+		)`, userID).
+		Where(`id IN (
+			SELECT ct.content_id FROM content_tags ct
+			WHERE ct.tag_id IN (
+				SELECT recent_ct.tag_id
+				FROM contents recent_c
+				JOIN content_tags recent_ct ON recent_ct.content_id = recent_c.id
+				WHERE recent_c.creator_id = ?
+				UNION
+				SELECT ct2.tag_id
+				FROM reactions r
+				JOIN contents reacted ON reacted.id = r.content_id
+				JOIN content_tags ct2 ON ct2.content_id = reacted.id
+				WHERE r.user_id = ?
+			)
+		)`, userID, userID).
+		Order(`(
+			SELECT COUNT(*) FROM reactions r WHERE r.content_id = contents.id
+		) DESC, created_at DESC`).
 		Limit(limit)
 
 	if len(excludeIDs) > 0 {
@@ -608,6 +665,117 @@ func (s *FeedService) hydrateReactionCounts(contents []model.Content) error {
 	}
 
 	return nil
+}
+
+func (s *FeedService) loadSeenContent(userID uuid.UUID, contentIDs []uuid.UUID) map[uuid.UUID]bool {
+	result := make(map[uuid.UUID]bool, len(contentIDs))
+	if len(contentIDs) == 0 {
+		return result
+	}
+
+	type row struct {
+		TargetID uuid.UUID `gorm:"column:target_id"`
+	}
+	var rows []row
+	if err := s.db.Raw(`
+		SELECT DISTINCT target_id
+		FROM events
+		WHERE user_id = ?
+			AND target_type = 'content'
+			AND type IN ('view', 'dwell')
+			AND target_id IN ?
+	`, userID, contentIDs).Scan(&rows).Error; err != nil {
+		return result
+	}
+	for _, row := range rows {
+		result[row.TargetID] = true
+	}
+	return result
+}
+
+func (s *FeedService) momentBridgeReason(userID uuid.UUID, content model.Content, room *RoomContext, seen bool) string {
+	tags := make([]string, 0, len(content.Tags))
+	for _, tag := range content.Tags {
+		tags = append(tags, tag.Name)
+	}
+	shared := s.sharedTagNames(userID, tags)
+	if len(shared) > 0 {
+		return "You both keep circling " + formatHashTags(shared) + "."
+	}
+	if room != nil && len(room.Tags) > 0 {
+		return fmt.Sprintf("%d people are in this context around %s.", room.MemberCount, formatHashTags(room.Tags))
+	}
+	if seen {
+		return "This is resurfacing because it still connects to your recent path."
+	}
+	if len(tags) > 0 {
+		return "A nearby moment in " + formatHashTags(tags[:minInt(len(tags), 3)]) + "."
+	}
+	return "A fresh moment near your graph."
+}
+
+func pathHintForContent(content model.Content, room *RoomContext, seen bool) string {
+	if seen {
+		return "Resurfaced"
+	}
+	if room != nil && room.MemberCount > 0 {
+		return "Shared context"
+	}
+	if len(content.Tags) > 0 {
+		return "Moment bridge"
+	}
+	return "New signal"
+}
+
+func (s *FeedService) sharedTagNames(userID uuid.UUID, candidateTags []string) []string {
+	if len(candidateTags) == 0 {
+		return nil
+	}
+	type row struct {
+		Name string `gorm:"column:name"`
+	}
+	var rows []row
+	if err := s.db.Raw(`
+		SELECT DISTINCT t.name
+		FROM contents c
+		JOIN content_tags ct ON ct.content_id = c.id
+		JOIN tags t ON t.id = ct.tag_id
+		WHERE c.creator_id = ? AND t.name IN ?
+		ORDER BY t.name
+		LIMIT 3
+	`, userID, candidateTags).Scan(&rows).Error; err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.Name)
+	}
+	return out
+}
+
+func formatHashTags(tags []string) string {
+	cleaned := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		trimmed := strings.TrimPrefix(strings.TrimSpace(tag), "#")
+		if trimmed != "" {
+			cleaned = append(cleaned, "#"+trimmed)
+		}
+	}
+	return strings.Join(cleaned, " + ")
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // ---------------------------------------------------------------------------

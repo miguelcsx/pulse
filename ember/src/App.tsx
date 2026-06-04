@@ -15,6 +15,7 @@ const Today = lazy(() => import("./pages/Today"));
 const Commons = lazy(() => import("./pages/Commons"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Network = lazy(() => import("./pages/Network"));
+const Paths = lazy(() => import("./pages/Paths"));
 const PathView = lazy(() => import("./pages/PathView"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -139,6 +140,7 @@ export default function App() {
             <Route path="/upload" element={<Upload />} />
             <Route path="/network" element={<Network />} />
             <Route path="/profile/me" element={<ProfileRedirect />} />
+            <Route path="/paths" element={<Paths />} />
             <Route path="/paths/:id" element={<PathView />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
