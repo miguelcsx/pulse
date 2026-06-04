@@ -1,11 +1,10 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
-  AffinityFeedItem,
+  AskedQuestion,
   AskVisibility,
   Bridge,
   DesiredHelpType,
-  FeedMoment,
   TodayResponse,
 } from "@pulse/drift/types";
 import {
@@ -14,11 +13,8 @@ import {
   respondBridge,
   updateAskVisibility,
 } from "../api/advice";
-import { getFeed } from "../api/content";
 import BridgeCard from "../components/advice/BridgeCard";
 import AskPathCard from "../components/feed/AskPathCard";
-import ContentModal from "../components/feed/ContentModal";
-import FeedCard from "../components/feed/FeedCard";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -41,14 +37,105 @@ const visibilityOptions: Array<{
   { value: "public", label: "Public", helper: "Anyone — can join the Commons" },
 ];
 
+function QuestionAnswers({
+  item,
+  publishing,
+  onPublish,
+}: {
+  item: AskedQuestion;
+  publishing: boolean;
+  onPublish: (askId: string, anonymous: boolean) => void;
+}) {
+  const answeredBridges = item.bridges.filter(
+    (bridge) => (bridge.responses?.length ?? 0) > 0,
+  );
+  const routedCount = item.bridges.filter(
+    (bridge) => bridge.status === "asked" || bridge.status === "responded",
+  ).length;
+  const isPublic = item.ask.visibility === "public";
+
+  return (
+    <article className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            Your question
+          </p>
+          <p className="mt-1.5 text-sm font-medium leading-relaxed">
+            {item.ask.question}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-[var(--color-surface)] px-2 py-1 text-[11px] text-[var(--color-text-muted)]">
+          {item.answer_count > 0
+            ? `${item.answer_count} answered`
+            : `${routedCount} routed`}
+        </span>
+      </div>
+
+      {answeredBridges.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {answeredBridges.map((bridge) =>
+            (bridge.responses ?? []).map((response) => (
+              <div
+                key={response.id}
+                className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-3"
+              >
+                <p className="text-xs font-semibold">
+                  {response.responder?.display_name ||
+                    response.responder?.handle ||
+                    bridge.recommended_user?.display_name ||
+                    bridge.recommended_user?.handle ||
+                    "Someone"}
+                </p>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                  {response.body}
+                </p>
+              </div>
+            )),
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
+          No answer yet. Pulse already routed this to people whose context is
+          close enough to help.
+        </p>
+      )}
+
+      {answeredBridges.length > 0 && !isPublic && (
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--color-border)] pt-3">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => onPublish(item.ask.id, true)}
+            loading={publishing}
+          >
+            Add to Commons anonymously
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onPublish(item.ask.id, false)}
+            disabled={publishing}
+          >
+            Add with my name
+          </Button>
+        </div>
+      )}
+      {isPublic && (
+        <Link
+          to="/commons"
+          className="mt-4 inline-flex text-xs font-medium text-[var(--color-accent)] hover:underline"
+        >
+          In Commons
+        </Link>
+      )}
+    </article>
+  );
+}
+
 export default function Today() {
   usePageTitle("Today");
   const [data, setData] = useState<TodayResponse | null>(null);
-  const [pathItems, setPathItems] = useState<AffinityFeedItem[]>([]);
-  const [pathCursor, setPathCursor] = useState("");
-  const [pathHasMore, setPathHasMore] = useState(false);
-  const [pathLoadingMore, setPathLoadingMore] = useState(false);
-  const [selectedMoment, setSelectedMoment] = useState<FeedMoment | null>(null);
   const [question, setQuestion] = useState("");
   const [helpType, setHelpType] = useState<DesiredHelpType>("advice");
   const [visibility, setVisibility] = useState<AskVisibility>("community");
@@ -60,25 +147,12 @@ export default function Today() {
   const [publishing, setPublishing] = useState(false);
   const addToast = useUiStore((s) => s.addToast);
 
-  const loadPath = useCallback(
-    async (cursor?: string) => {
-      const res = await getFeed(cursor, 12);
-      setPathItems((prev) => (cursor ? [...prev, ...res.items] : res.items));
-      setPathCursor(res.next_cursor);
-      setPathHasMore(res.has_more);
-    },
-    [],
-  );
-
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getToday(), getFeed(undefined, 12)])
-      .then(([today, feed]) => {
+    getToday()
+      .then((today) => {
         if (cancelled) return;
         setData(today);
-        setPathItems(feed.items);
-        setPathCursor(feed.next_cursor);
-        setPathHasMore(feed.has_more);
       })
       .catch(() => addToast("Failed to load Today", "error"))
       .finally(() => {
@@ -106,6 +180,18 @@ export default function Today() {
       setQuestion("");
       setData((prev) => ({
         latest_ask: res.ask,
+        recent_asks: [
+          {
+            ask: res.ask,
+            bridges: res.bridges,
+            answer_count: res.bridges.reduce(
+              (count, bridge) => count + (bridge.responses?.length ?? 0),
+              0,
+            ),
+            last_at: res.ask.created_at,
+          },
+          ...(prev?.recent_asks ?? []),
+        ],
         bridges: res.bridges,
         incoming_bridges: prev?.incoming_bridges ?? [],
         perspective_inbox: prev?.perspective_inbox ?? [],
@@ -116,7 +202,6 @@ export default function Today() {
         trust_profile: prev?.trust_profile,
         starter_prompts: prev?.starter_prompts ?? [],
       }));
-      loadPath().catch(() => {});
       const routed = res.bridges.filter(
         (b) => b.status === "asked" || b.status === "responded",
       ).length;
@@ -144,13 +229,21 @@ export default function Today() {
             incoming_bridges: (prev.incoming_bridges ?? []).map((b) =>
               b.id === updated.id ? updated : b,
             ),
+            perspective_inbox: (prev.perspective_inbox ?? [])
+              .map((b) => (b.id === updated.id ? updated : b))
+              .filter((b) => (b.responses?.length ?? 0) === 0),
+            recent_asks: (prev.recent_asks ?? []).map((item) => ({
+              ...item,
+              bridges: item.bridges.map((b) =>
+                b.id === updated.id ? updated : b,
+              ),
+              answer_count: item.bridges.reduce((count, b) => {
+                const bridge = b.id === updated.id ? updated : b;
+                return count + (bridge.responses?.length ?? 0);
+              }, 0),
+            })),
           }
         : prev,
-    );
-    setPathItems((prev) =>
-      prev.map((item) =>
-        item.bridge?.id === updated.id ? { ...item, bridge: updated } : item,
-      ),
     );
   }
 
@@ -170,32 +263,30 @@ export default function Today() {
     }
   }
 
-  async function handlePublish(anonymous: boolean) {
-    if (!data?.latest_ask) return;
+  async function handlePublish(askId: string, anonymous: boolean) {
     setPublishing(true);
     try {
-      const updated = await updateAskVisibility(data.latest_ask.id, {
+      const updated = await updateAskVisibility(askId, {
         visibility: "public",
         anonymous,
       });
-      setData((prev) => (prev ? { ...prev, latest_ask: updated } : prev));
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              latest_ask:
+                prev.latest_ask?.id === updated.id ? updated : prev.latest_ask,
+              recent_asks: (prev.recent_asks ?? []).map((item) =>
+                item.ask.id === updated.id ? { ...item, ask: updated } : item,
+              ),
+            }
+          : prev,
+      );
       addToast("Published to the Commons", "success");
     } catch {
       addToast("Failed to publish", "error");
     } finally {
       setPublishing(false);
-    }
-  }
-
-  async function loadMorePath() {
-    if (pathLoadingMore || !pathHasMore || !pathCursor) return;
-    setPathLoadingMore(true);
-    try {
-      await loadPath(pathCursor);
-    } catch {
-      addToast("Failed to load more path items", "error");
-    } finally {
-      setPathLoadingMore(false);
     }
   }
 
@@ -211,41 +302,46 @@ export default function Today() {
   const incomingBridges = data?.incoming_bridges ?? [];
   const perspectiveInbox = data?.perspective_inbox ?? [];
   const responseReceipts = data?.response_receipts ?? [];
-  const sharedRooms = data?.shared_rooms ?? [];
   const relationshipTrails = data?.relationship_trails ?? [];
+  const recentAsks = data?.recent_asks ?? [];
+  const answeredAsks = recentAsks.filter((item) => item.answer_count > 0);
+  const waitingAsks = recentAsks.filter(
+    (item) => item.answer_count === 0 && item.bridges.length > 0,
+  );
+  const sentPerspectives = incomingBridges.filter(
+    (bridge) => (bridge.responses?.length ?? 0) > 0,
+  );
   const starterPrompts = data?.starter_prompts ?? [];
   const trustProfile = data?.trust_profile;
   const latestAsk = data?.latest_ask;
-  const routedCount = bridges.filter(
-    (b) => b.status === "asked" || b.status === "responded",
-  ).length;
   const answeredCount = bridges.filter((b) => (b.responses?.length ?? 0) > 0)
     .length;
-  const isPublished = latestAsk?.visibility === "public";
 
   return (
     <div className="space-y-8 pb-4">
-      {/* Hero */}
       <section className="pt-4">
         <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight">
-          Your affinity path
+          Today
           <br />
           <span className="text-[var(--color-text-muted)]">
-            through moments and people.
+            answers, asks, and next people.
           </span>
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
-          Pulse routes the next useful thing: a moment, a person, or a question
-          where your context can help.
+          This is the place for human loops: what came back to you, what needs
+          your perspective, and who Pulse can connect next.
         </p>
       </section>
 
-      {/* Affinity itinerary */}
       <section className="grid gap-2 sm:grid-cols-4">
         {[
-          { label: "Moments", value: pathItems.length, to: "#path" },
-          { label: "Inbox", value: perspectiveInbox.length, to: "#inbox" },
-          { label: "Rooms", value: sharedRooms.length, to: "#rooms" },
+          {
+            label: "Answers",
+            value: answeredAsks.reduce((sum, item) => sum + item.answer_count, 0),
+            to: "#answers",
+          },
+          { label: "For you", value: perspectiveInbox.length, to: "#inbox" },
+          { label: "Waiting", value: waitingAsks.length, to: "#waiting" },
           { label: "Trails", value: relationshipTrails.length, to: "#trails" },
         ].map((step) => (
           <a
@@ -263,7 +359,44 @@ export default function Today() {
         ))}
       </section>
 
-      {/* Ask box */}
+      <section id="answers" className="space-y-3 scroll-mt-20">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-[17px] font-semibold">
+              Answers to your questions
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Read them here first. Commons is optional.
+            </p>
+          </div>
+          <Link
+            to="/commons"
+            className="shrink-0 text-xs font-medium text-[var(--color-accent)] hover:underline"
+          >
+            Moments in common
+          </Link>
+        </div>
+        {answeredAsks.length > 0 ? (
+          <div className="space-y-3">
+            {answeredAsks.map((item) => (
+              <QuestionAnswers
+                key={item.ask.id}
+                item={item}
+                publishing={publishing}
+                onPublish={handlePublish}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-5">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              No answers yet. Ask a question below and Pulse will route it to
+              people with nearby lived context.
+            </p>
+          </div>
+        )}
+      </section>
+
       <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -342,82 +475,6 @@ export default function Today() {
         </div>
       </section>
 
-      {/* Live affinity path */}
-      <section id="path" className="space-y-3 scroll-mt-20">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-[17px] font-semibold">Next in your path</h2>
-            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-              Mixed by affinity, recency, and diversity — not popularity.
-            </p>
-          </div>
-          <Link
-            to="/commons"
-            className="shrink-0 text-xs font-medium text-[var(--color-accent)] hover:underline"
-          >
-            Commons
-          </Link>
-        </div>
-
-        {pathItems.length === 0 ? (
-          <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center">
-            <p className="text-sm text-[var(--color-text-muted)]">
-              Your path is warming up. Share a tagged moment or ask for
-              perspective so Pulse can find stronger context.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {pathItems.map((item) => {
-              const moment = item.content
-                ? { ...item.content, room_context: item.room_context }
-                : null;
-
-              return (
-                <Fragment key={`${item.unit_type}-${item.id}`}>
-                  {item.unit_type === "ask" && item.bridge ? (
-                    <AskPathCard
-                      bridge={item.bridge}
-                      onUpdate={updateBridge}
-                      compact
-                    />
-                  ) : moment ? (
-                    <div className="space-y-2">
-                      {(item.path_hint || item.reason) && (
-                        <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-[var(--color-text-muted)]">
-                          {item.path_hint && (
-                            <span className="rounded-full bg-[var(--color-surface)] px-2 py-1 font-medium text-[var(--color-text-secondary)]">
-                              {item.path_hint}
-                            </span>
-                          )}
-                          {item.reason && <span>{item.reason}</span>}
-                        </div>
-                      )}
-                      <FeedCard
-                        content={moment}
-                        onClick={() => setSelectedMoment(moment)}
-                      />
-                    </div>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-            {pathHasMore && (
-              <div className="flex justify-center pt-1">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={loadMorePath}
-                  loading={pathLoadingMore}
-                >
-                  Continue path
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
       {/* Starter prompts — warm entry when there's no ask yet */}
       {!latestAsk && starterPrompts.length > 0 && (
         <section>
@@ -460,61 +517,36 @@ export default function Today() {
         </section>
       )}
 
-      {/* Your ask + routing status */}
-      {latestAsk && (
-        <section className="space-y-3">
-          <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
-              Your ask
-            </p>
-            <p className="text-sm leading-relaxed">{latestAsk.question}</p>
-            <p className="mt-3 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-              {answeredCount > 0
-                ? `${answeredCount} ${answeredCount === 1 ? "person has" : "people have"} answered`
-                : routedCount > 0
-                  ? `Routed to ${routedCount} ${routedCount === 1 ? "person" : "people"} — their perspective lands here`
-                  : "Finding people who've lived this…"}
+      {waitingAsks.length > 0 && (
+        <section id="waiting" className="space-y-3 scroll-mt-20">
+          <div>
+            <h2 className="text-[17px] font-semibold">Waiting on answers</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Questions already routed by Pulse. Nothing else to click.
             </p>
           </div>
-
-          {/* Publish to Commons once answered */}
-          {answeredCount > 0 && !isPublished && (
-            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border-emphasis)] p-4">
-              <p className="text-sm font-medium">Help the next person</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                Publish this ask and its perspectives to the Commons so others
-                facing the same thing can find it.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => handlePublish(true)}
-                  loading={publishing}
+          <div className="space-y-2">
+            {waitingAsks.map((item) => {
+              const routed = item.bridges.filter(
+                (bridge) =>
+                  bridge.status === "asked" || bridge.status === "responded",
+              ).length;
+              return (
+                <article
+                  key={item.ask.id}
+                  className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4"
                 >
-                  Publish anonymously
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => handlePublish(false)}
-                  disabled={publishing}
-                >
-                  Publish with my name
-                </Button>
-              </div>
-            </div>
-          )}
-          {isPublished && (
-            <Link
-              to="/commons"
-              className="flex items-center justify-between rounded-[var(--radius-md)] bg-[var(--color-accent-subtle)] px-4 py-3 text-sm font-medium text-[var(--color-accent)]"
-            >
-              <span>✓ Published to the Commons</span>
-              <span className="text-xs">View →</span>
-            </Link>
-          )}
+                  <p className="text-sm font-medium leading-relaxed">
+                    {item.ask.question}
+                  </p>
+                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                    Routed to {routed} {routed === 1 ? "person" : "people"}.
+                    Their answers will appear at the top of Today.
+                  </p>
+                </article>
+              );
+            })}
+          </div>
         </section>
       )}
 
@@ -559,8 +591,35 @@ export default function Today() {
         </section>
       )}
 
-      {/* Bridges — the matched people + their answers */}
-      {bridges.length > 0 && (
+      {sentPerspectives.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[17px] font-semibold">
+              Perspectives you sent
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              A lightweight history of where you helped.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {sentPerspectives.map((bridge) => (
+              <article
+                key={bridge.id}
+                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4"
+              >
+                <p className="text-sm font-medium leading-relaxed">
+                  {bridge.ask?.question}
+                </p>
+                <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-[var(--color-text-muted)]">
+                  {bridge.responses?.[0]?.body}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {bridges.length > 0 && answeredCount === 0 && (
         <section className="space-y-3">
           <div>
             <h2 className="text-[17px] font-semibold">People matched to you</h2>
@@ -646,35 +705,6 @@ export default function Today() {
               </article>
             );
           })}
-        </section>
-      )}
-
-      {/* Shared context rooms */}
-      {sharedRooms.length > 0 && (
-        <section id="rooms" className="space-y-3 scroll-mt-20">
-          <div>
-            <h2 className="text-[17px] font-semibold">Shared context rooms</h2>
-            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-              Temporary rooms where the graph has enough nearby people to make
-              the next answer easier.
-            </p>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {sharedRooms.map((room) => (
-              <div
-                key={room.id}
-                className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4 transition-colors hover:bg-[var(--color-surface)]"
-              >
-                <p className="text-sm font-semibold">{room.title}</p>
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  {room.description}
-                </p>
-                <p className="mt-3 text-xs font-medium text-[var(--color-accent)]">
-                  {room.member_count} nearby
-                </p>
-              </div>
-            ))}
-          </div>
         </section>
       )}
 
@@ -768,12 +798,6 @@ export default function Today() {
         )}
       </section>
 
-      {selectedMoment && (
-        <ContentModal
-          content={selectedMoment}
-          onClose={() => setSelectedMoment(null)}
-        />
-      )}
     </div>
   );
 }

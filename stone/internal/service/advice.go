@@ -40,6 +40,7 @@ type HelpSignalInput struct {
 
 type TodayResult struct {
 	LatestAsk          *model.Ask          `json:"latest_ask,omitempty"`
+	RecentAsks         []AskedQuestion     `json:"recent_asks"`
 	Bridges            []model.Bridge      `json:"bridges"`
 	IncomingBridges    []model.Bridge      `json:"incoming_bridges"`
 	PerspectiveInbox   []model.Bridge      `json:"perspective_inbox"`
@@ -49,6 +50,13 @@ type TodayResult struct {
 	RelationshipTrails []model.Path        `json:"relationship_trails"`
 	TrustProfile       *model.TrustProfile `json:"trust_profile,omitempty"`
 	StarterPrompts     []string            `json:"starter_prompts"`
+}
+
+type AskedQuestion struct {
+	Ask         model.Ask      `json:"ask"`
+	Bridges     []model.Bridge `json:"bridges"`
+	AnswerCount int            `json:"answer_count"`
+	LastAt      time.Time      `json:"last_at"`
 }
 
 type ResponseReceipt struct {
@@ -356,6 +364,7 @@ func (s *AdviceService) GetTrustProfile(userID uuid.UUID) (*model.TrustProfile, 
 
 func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 	result := &TodayResult{
+		RecentAsks:         []AskedQuestion{},
 		Bridges:            []model.Bridge{},
 		IncomingBridges:    []model.Bridge{},
 		PerspectiveInbox:   []model.Bridge{},
@@ -376,6 +385,7 @@ func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 		bridges, _ := s.GetAskBridges(ask.ID, userID)
 		result.Bridges = bridges
 	}
+	result.RecentAsks = s.recentAskedQuestions(userID, 6)
 
 	incoming, _ := s.GetIncomingBridges(userID, 8)
 	result.IncomingBridges = incoming
@@ -721,6 +731,61 @@ func takeHelpSessions(sessions []model.HelpSession, limit int) []model.HelpSessi
 		return sessions
 	}
 	return sessions[:limit]
+}
+
+func (s *AdviceService) recentAskedQuestions(userID uuid.UUID, limit int) []AskedQuestion {
+	if limit <= 0 {
+		limit = 6
+	}
+	var asks []model.Ask
+	if err := s.db.Preload("User").
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&asks).Error; err != nil || len(asks) == 0 {
+		return []AskedQuestion{}
+	}
+
+	askIDs := make([]uuid.UUID, 0, len(asks))
+	for _, ask := range asks {
+		askIDs = append(askIDs, ask.ID)
+	}
+
+	var bridges []model.Bridge
+	if err := s.db.Preload("RecommendedUser").
+		Preload("Responses.Responder").
+		Where("ask_id IN ?", askIDs).
+		Order("updated_at DESC").
+		Find(&bridges).Error; err != nil {
+		return []AskedQuestion{}
+	}
+
+	byAsk := make(map[uuid.UUID][]model.Bridge)
+	for _, bridge := range bridges {
+		byAsk[bridge.AskID] = append(byAsk[bridge.AskID], bridge)
+	}
+
+	out := make([]AskedQuestion, 0, len(asks))
+	for _, ask := range asks {
+		group := byAsk[ask.ID]
+		answerCount := 0
+		lastAt := ask.UpdatedAt
+		for _, bridge := range group {
+			if len(bridge.Responses) > 0 {
+				answerCount += len(bridge.Responses)
+			}
+			if bridge.UpdatedAt.After(lastAt) {
+				lastAt = bridge.UpdatedAt
+			}
+		}
+		out = append(out, AskedQuestion{
+			Ask:         ask,
+			Bridges:     group,
+			AnswerCount: answerCount,
+			LastAt:      lastAt,
+		})
+	}
+	return out
 }
 
 func (s *AdviceService) responseReceipts(userID uuid.UUID, limit int) []ResponseReceipt {

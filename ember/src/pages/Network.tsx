@@ -66,12 +66,11 @@ function PersonRow({
           )}
           <div className="flex flex-wrap gap-2 text-[11px] text-[var(--color-text-muted)]">
             {activeRoom && (
-              <Link
-                to="/#rooms"
+              <span
                 className="rounded-full bg-[var(--color-accent-subtle)] px-2 py-1 font-medium text-[var(--color-accent)]"
               >
-                room · {activeRoom.member_count} nearby
-              </Link>
+                shared context · {activeRoom.member_count} nearby
+              </span>
             )}
             {sharedPath && (
               <Link

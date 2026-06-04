@@ -242,6 +242,13 @@ export interface AskCreateResponse {
   bridges: Bridge[];
 }
 
+export interface AskedQuestion {
+  ask: Ask;
+  bridges: Bridge[];
+  answer_count: number;
+  last_at: string;
+}
+
 export interface HelpSignal {
   id: string;
   bridge_id: string;
@@ -288,6 +295,7 @@ export interface HelpSession {
 
 export interface TodayResponse {
   latest_ask?: Ask;
+  recent_asks: AskedQuestion[];
   bridges: Bridge[];
   incoming_bridges: Bridge[];
   perspective_inbox: Bridge[];

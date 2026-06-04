@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { CommonsEntry, FeedMoment } from "@pulse/drift/types";
+import type {
+  AffinityFeedItem,
+  CommonsEntry,
+  FeedMoment,
+} from "@pulse/drift/types";
 import { addPerspective, listCommons } from "../api/advice";
 import { getFeed } from "../api/content";
 import ContentModal from "../components/feed/ContentModal";
@@ -19,12 +23,13 @@ function Avatar({ char }: { char: string }) {
 }
 
 function MomentTile({
-  moment,
+  item,
   onClick,
 }: {
-  moment: FeedMoment;
+  item: AffinityFeedItem;
   onClick: () => void;
 }) {
+  const moment = item.content!;
   return (
     <button
       type="button"
@@ -60,6 +65,20 @@ function MomentTile({
         </div>
       )}
       <div className="p-3">
+        {(item.path_hint || item.reason) && (
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            {item.path_hint && (
+              <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">
+                {item.path_hint}
+              </span>
+            )}
+            {item.reason && (
+              <span className="line-clamp-1 text-[11px] text-[var(--color-text-muted)]">
+                {item.reason}
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-surface-active)] text-[10px] font-semibold text-[var(--color-text-secondary)]">
             {moment.creator?.display_name?.[0] || "?"}
@@ -181,6 +200,7 @@ function CommonsCard({ entry }: { entry: CommonsEntry }) {
         ) : open ? (
           <div className="space-y-2">
             <textarea
+              name={`commons-perspective-${ask.id}`}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               autoFocus
@@ -224,7 +244,7 @@ function CommonsCard({ entry }: { entry: CommonsEntry }) {
 export default function Commons() {
   usePageTitle("Commons");
   const [entries, setEntries] = useState<CommonsEntry[] | null>(null);
-  const [moments, setMoments] = useState<FeedMoment[]>([]);
+  const [moments, setMoments] = useState<AffinityFeedItem[]>([]);
   const [selectedMoment, setSelectedMoment] = useState<FeedMoment | null>(null);
   const [cursor, setCursor] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -243,8 +263,11 @@ export default function Commons() {
           feed.items
             .filter((item) => item.content)
             .map((item) => ({
-              ...item.content!,
-              room_context: item.room_context,
+              ...item,
+              content: {
+                ...item.content!,
+                room_context: item.room_context,
+              },
             })),
         );
       })
@@ -307,8 +330,8 @@ export default function Commons() {
             {moments.map((moment) => (
               <MomentTile
                 key={moment.id}
-                moment={moment}
-                onClick={() => setSelectedMoment(moment)}
+                item={moment}
+                onClick={() => moment.content && setSelectedMoment(moment.content)}
               />
             ))}
           </div>
