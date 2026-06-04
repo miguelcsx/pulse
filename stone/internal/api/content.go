@@ -1,6 +1,7 @@
 package api
 
 import (
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,17 +41,22 @@ func (s *Server) CreateContent(c *gin.Context) {
 	// For text posts, no file needed. Media posts use either direct multipart
 	// upload or a ready media_asset_id from the async media pipeline.
 	var filename string
-	file, header, err := c.Request.FormFile("file")
-	if err == nil {
-		defer file.Close()
-		filename = header.Filename
-	} else if contentType != model.ContentTypeText && mediaAssetIDRaw == "" {
-		if strings.Contains(err.Error(), "http: request body too large") {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "payload too large"})
+	var file multipart.File
+	if mediaAssetIDRaw == "" {
+		var header *multipart.FileHeader
+		var err error
+		file, header, err = c.Request.FormFile("file")
+		if err == nil {
+			defer file.Close()
+			filename = header.Filename
+		} else if contentType != model.ContentTypeText {
+			if strings.Contains(err.Error(), "http: request body too large") {
+				c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "payload too large"})
+				return
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": "file is required for non-text content"})
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required for non-text content"})
-		return
 	}
 
 	var content *model.Content
@@ -66,11 +72,12 @@ func (s *Server) CreateContent(c *gin.Context) {
 			return
 		}
 	} else {
+		var err error
 		content, err = s.contentService.Create(userID, contentType, filename, file, body, tagNames)
-	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusCreated, content)
