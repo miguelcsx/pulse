@@ -35,7 +35,10 @@ type Ask struct {
 	Urgency         string    `gorm:"size:40;not null;default:'soon'" json:"urgency"`
 	DesiredHelpType string    `gorm:"size:40;not null;default:'advice'" json:"desired_help_type"`
 	Visibility      string    `gorm:"size:40;not null;default:'community'" json:"visibility"`
-	Embedding       *string   `gorm:"type:vector(1024)" json:"-"`
+	// Anonymous hides the asker's identity when an answered ask is published
+	// to the Commons — vulnerability stays protected, the answerer gets credit.
+	Anonymous bool    `gorm:"not null;default:false" json:"anonymous"`
+	Embedding *string `gorm:"type:vector(1024)" json:"-"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }

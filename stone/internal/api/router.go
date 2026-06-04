@@ -165,6 +165,7 @@ func (s *Server) setupRoutes() {
 			// User profile
 			protected.GET("/me", s.GetMe)
 			protected.PUT("/me", s.UpdateMe)
+			protected.GET("/users/search", s.SearchUsers)
 			protected.GET("/users/:id", s.GetUser)
 			protected.GET("/users/:id/content", s.ListUserContent)
 
@@ -187,9 +188,13 @@ func (s *Server) setupRoutes() {
 			// Human advice network
 			protected.POST("/asks", s.CreateAsk)
 			protected.GET("/asks/:id/bridges", s.GetAskBridges)
+			protected.PUT("/asks/:id/visibility", s.UpdateAskVisibility)
+			protected.POST("/asks/:id/perspective", s.AddPerspective)
 			protected.POST("/bridges/:id/ask", s.AskBridge)
 			protected.POST("/bridges/:id/respond", s.RespondBridge)
 			protected.POST("/bridges/:id/signal", s.SignalBridge)
+			protected.GET("/commons", s.ListCommons)
+			protected.GET("/network", s.GetNetwork)
 			protected.GET("/help-sessions", s.ListHelpSessions)
 			protected.POST("/help-sessions/:id/join", s.JoinHelpSession)
 			protected.PUT("/me/trust-profile", s.UpdateTrustProfile)

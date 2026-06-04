@@ -41,7 +41,7 @@ async function waitForReady(
 }
 
 export default function Upload() {
-  usePageTitle("New post");
+  usePageTitle("Share a moment");
   const navigate = useNavigate();
   const addToast = useUiStore((s) => s.addToast);
   const [contentType, setContentType] = useState<ContentType>("image");
@@ -112,7 +112,7 @@ export default function Upload() {
       }
 
       addToast("Posted!", "success");
-      navigate("/moments");
+      navigate("/profile/me");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to post";
@@ -126,9 +126,15 @@ export default function Upload() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-4">
-      <h2 className="text-[22px] font-semibold tracking-tight pt-2">
-        New post
-      </h2>
+      <div className="pt-2">
+        <h2 className="text-[22px] font-semibold tracking-tight">
+          Share a moment
+        </h2>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          Moments are proof of what you&rsquo;ve lived — they shape who Pulse
+          connects you with and show on your profile.
+        </p>
+      </div>
 
       {/* Type selector */}
       <div className="flex gap-2">

@@ -1,5 +1,4 @@
 import { Link } from "react-router-dom";
-import FeedContextIndicator from "../feed/FeedContextIndicator";
 
 export default function Header() {
   return (
@@ -8,7 +7,6 @@ export default function Header() {
         Pulse
       </Link>
       <div className="flex items-center gap-2">
-        <FeedContextIndicator />
         <Link
           to="/settings"
           className="rounded-full p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors"

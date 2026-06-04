@@ -1,10 +1,15 @@
 import type {
+  Ask,
   AskCreateInput,
   AskCreateResponse,
+  AskVisibilityInput,
   Bridge,
+  CommonsEntry,
   HelpSession,
   HelpSignal,
   HelpSignalKind,
+  NetworkConnection,
+  PaginatedResponse,
   TodayResponse,
   TrustProfile,
   TrustProfileInput,
@@ -69,5 +74,38 @@ export async function updateTrustProfile(
   input: TrustProfileInput,
 ): Promise<TrustProfile> {
   const response = await client.put<TrustProfile>("/me/trust-profile", input);
+  return response.data;
+}
+
+export async function updateAskVisibility(
+  askId: string,
+  input: AskVisibilityInput,
+): Promise<Ask> {
+  const response = await client.put<Ask>(`/asks/${askId}/visibility`, input);
+  return response.data;
+}
+
+export async function listCommons(
+  cursor?: string,
+): Promise<PaginatedResponse<CommonsEntry>> {
+  const response = await client.get<PaginatedResponse<CommonsEntry>>(
+    "/commons",
+    { params: cursor ? { cursor } : undefined },
+  );
+  return response.data;
+}
+
+export async function getNetwork(): Promise<NetworkConnection[]> {
+  const response = await client.get<NetworkConnection[]>("/network");
+  return response.data;
+}
+
+export async function addPerspective(
+  askId: string,
+  message: string,
+): Promise<Bridge> {
+  const response = await client.post<Bridge>(`/asks/${askId}/perspective`, {
+    message,
+  });
   return response.data;
 }

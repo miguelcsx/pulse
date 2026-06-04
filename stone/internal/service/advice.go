@@ -86,7 +86,34 @@ func (s *AdviceService) CreateAsk(userID uuid.UUID, input AskInput) (*model.Ask,
 	if err != nil {
 		return ask, []model.Bridge{}, err
 	}
+
+	// Implicit routing: the ask automatically reaches the strongest matches —
+	// the user does not have to manually "request" each person. Reaching the
+	// rest stays optional (POST /bridges/:id/ask).
+	bridges = s.autoRouteBridges(bridges, 3)
 	return ask, bridges, nil
+}
+
+// autoRouteBridges promotes the top-N suggested bridges (by confidence) to
+// "asked" so their recommended people see the ask as a real, directed request.
+func (s *AdviceService) autoRouteBridges(bridges []model.Bridge, n int) []model.Bridge {
+	routed := 0
+	for i := range bridges {
+		if routed >= n {
+			break
+		}
+		if bridges[i].Status != model.BridgeStatusSuggested {
+			continue
+		}
+		if err := s.db.Model(&model.Bridge{}).
+			Where("id = ?", bridges[i].ID).
+			Update("status", model.BridgeStatusAsked).Error; err != nil {
+			continue
+		}
+		bridges[i].Status = model.BridgeStatusAsked
+		routed++
+	}
+	return bridges
 }
 
 func (s *AdviceService) GetAskBridges(askID, userID uuid.UUID) ([]model.Bridge, error) {
@@ -188,6 +215,59 @@ func (s *AdviceService) RespondBridge(bridgeID, userID uuid.UUID, input BridgeAc
 	return s.loadBridge(bridge.ID)
 }
 
+// AddPerspective lets anyone who has lived a public Commons ask offer their
+// perspective — the non-Twitter alternative to a reply. It creates (or reuses)
+// a bridge from the ask to this person and records their answer.
+func (s *AdviceService) AddPerspective(askID, userID uuid.UUID, message string) (*model.Bridge, error) {
+	body := strings.TrimSpace(message)
+	if len(body) < 8 {
+		return nil, fmt.Errorf("perspective must be at least 8 characters")
+	}
+	if len(body) > 1200 {
+		return nil, fmt.Errorf("response must be 1200 characters or fewer")
+	}
+
+	var ask model.Ask
+	if err := s.db.First(&ask, "id = ?", askID).Error; err != nil {
+		return nil, ErrAdviceNotFound
+	}
+	if ask.Visibility != "public" {
+		return nil, fmt.Errorf("this ask is not open to the Commons")
+	}
+	if ask.UserID == userID {
+		return nil, fmt.Errorf("you cannot answer your own ask")
+	}
+
+	bridge := model.Bridge{
+		AskID:             ask.ID,
+		RequesterID:       ask.UserID,
+		RecommendedUserID: userID,
+		Reason:            "Offered perspective from lived experience in the Commons.",
+		BridgeType:        model.BridgeTypeAdjacentPerspective,
+		Status:            model.BridgeStatusResponded,
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("ask_id = ? AND recommended_user_id = ?", ask.ID, userID).
+			Assign(map[string]any{
+				"requester_id": ask.UserID,
+				"reason":       bridge.Reason,
+				"bridge_type":  bridge.BridgeType,
+				"status":       model.BridgeStatusResponded,
+			}).
+			FirstOrCreate(&bridge).Error; err != nil {
+			return err
+		}
+		response := model.BridgeResponse{BridgeID: bridge.ID, ResponderID: userID, Body: body}
+		return tx.Where("bridge_id = ? AND responder_id = ?", bridge.ID, userID).
+			Assign(map[string]any{"body": body, "updated_at": time.Now()}).
+			FirstOrCreate(&response).Error
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to add perspective: %w", err)
+	}
+	return s.loadBridge(bridge.ID)
+}
+
 func (s *AdviceService) RecordSignal(bridgeID, userID uuid.UUID, input HelpSignalInput) (*model.HelpSignal, error) {
 	kind := normalizeChoice(input.Kind, "", map[string]bool{
 		"useful": true, "clarifying": true, "motivating": true, "practical": true, "not_relevant": true,
@@ -284,9 +364,6 @@ func (s *AdviceService) GetToday(userID uuid.UUID) (*TodayResult, error) {
 	incoming, _ := s.GetIncomingBridges(userID, 8)
 	result.IncomingBridges = incoming
 
-	sessions, _ := s.ListHelpSessions(userID)
-	result.HelpSessions = sessions
-
 	if profile, err := s.GetTrustProfile(userID); err == nil {
 		result.TrustProfile = profile
 	}
@@ -302,11 +379,14 @@ func (s *AdviceService) GetIncomingBridges(userID uuid.UUID, limit int) ([]model
 		limit = 20
 	}
 
+	// Only asks actually routed to this person ("asked") or already handled
+	// ("responded") — never raw "suggested" candidates nobody sent them.
 	var bridges []model.Bridge
 	err := s.db.Preload("Ask.User").
 		Preload("RecommendedUser").
 		Preload("Responses.Responder").
-		Where("recommended_user_id = ? AND status <> ?", userID, model.BridgeStatusDismissed).
+		Where("recommended_user_id = ? AND status IN ?", userID,
+			[]string{model.BridgeStatusAsked, model.BridgeStatusResponded}).
 		Order("created_at DESC").
 		Limit(limit).
 		Find(&bridges).Error
@@ -314,6 +394,190 @@ func (s *AdviceService) GetIncomingBridges(userID uuid.UUID, limit int) ([]model
 		return nil, fmt.Errorf("failed to load incoming bridges: %w", err)
 	}
 	return bridges, nil
+}
+
+// CommonsEntry is one answered ask published to the Commons: the question plus
+// the perspectives people offered. When the ask is anonymous the asker identity
+// is stripped before it leaves the service.
+type CommonsEntry struct {
+	Ask       model.Ask              `json:"ask"`
+	Responses []model.BridgeResponse `json:"responses"`
+}
+
+// ListCommons returns public asks that have at least one answer, newest first.
+// This is the social surface: a growing library of lived perspectives, not a
+// broadcast timeline.
+func (s *AdviceService) ListCommons(userID uuid.UUID, cursor string, limit int) ([]CommonsEntry, string, bool, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	page := 0
+	if cursor != "" {
+		parsed, err := decodeScoredCursor(cursor)
+		if err != nil {
+			return nil, "", false, err
+		}
+		page = parsed
+	}
+	offset := page * limit
+
+	var asks []model.Ask
+	if err := s.db.Preload("User").
+		Where("visibility = ?", "public").
+		Where(`EXISTS (
+			SELECT 1 FROM bridge_responses br
+			JOIN bridges b ON b.id = br.bridge_id
+			WHERE b.ask_id = asks.id
+		)`).
+		Order("created_at DESC").
+		Limit(limit + 1).
+		Offset(offset).
+		Find(&asks).Error; err != nil {
+		return nil, "", false, fmt.Errorf("failed to load commons: %w", err)
+	}
+
+	hasMore := len(asks) > limit
+	if hasMore {
+		asks = asks[:limit]
+	}
+	if len(asks) == 0 {
+		return []CommonsEntry{}, "", false, nil
+	}
+
+	askIDs := make([]uuid.UUID, len(asks))
+	for i, a := range asks {
+		askIDs[i] = a.ID
+	}
+
+	var bridges []model.Bridge
+	if err := s.db.Preload("Responses.Responder").
+		Where("ask_id IN ?", askIDs).
+		Find(&bridges).Error; err != nil {
+		return nil, "", false, fmt.Errorf("failed to load commons responses: %w", err)
+	}
+	responsesByAsk := make(map[uuid.UUID][]model.BridgeResponse)
+	for _, b := range bridges {
+		responsesByAsk[b.AskID] = append(responsesByAsk[b.AskID], b.Responses...)
+	}
+
+	entries := make([]CommonsEntry, 0, len(asks))
+	for _, ask := range asks {
+		responses := responsesByAsk[ask.ID]
+		if len(responses) == 0 {
+			continue
+		}
+		if ask.Anonymous {
+			// Strip the asker's identity before it leaves the service.
+			ask.User = model.User{}
+			ask.UserID = uuid.Nil
+		}
+		ask.Embedding = nil
+		entries = append(entries, CommonsEntry{Ask: ask, Responses: responses})
+	}
+
+	var nextCursor string
+	if hasMore {
+		nextCursor = encodeScoredCursor(page + 1)
+	}
+	return entries, nextCursor, hasMore, nil
+}
+
+type AskVisibilityInput struct {
+	Visibility string `json:"visibility"`
+	Anonymous  bool   `json:"anonymous"`
+}
+
+// UpdateAskVisibility lets the asker change who can see an ask — in particular
+// publishing an answered ask to the Commons, optionally anonymously.
+func (s *AdviceService) UpdateAskVisibility(askID, userID uuid.UUID, input AskVisibilityInput) (*model.Ask, error) {
+	visibility := normalizeChoice(input.Visibility, "community", map[string]bool{"private": true, "community": true, "public": true})
+
+	var ask model.Ask
+	if err := s.db.Where("id = ? AND user_id = ?", askID, userID).First(&ask).Error; err != nil {
+		return nil, ErrAdviceNotFound
+	}
+	if err := s.db.Model(&ask).Updates(map[string]any{
+		"visibility": visibility,
+		"anonymous":  input.Anonymous,
+		"updated_at": time.Now(),
+	}).Error; err != nil {
+		return nil, fmt.Errorf("failed to update ask visibility: %w", err)
+	}
+	ask.Visibility = visibility
+	ask.Anonymous = input.Anonymous
+	ask.Embedding = nil
+	return &ask, nil
+}
+
+// NetworkConnection is one person you've actually exchanged perspective with —
+// either they answered your ask, or you answered theirs.
+type NetworkConnection struct {
+	User      model.User `json:"user"`
+	Direction string     `json:"direction"` // "you_asked" | "you_answered"
+	Topic     string     `json:"topic"`
+	Question  string     `json:"question"`
+	LastAt    time.Time  `json:"last_at"`
+}
+
+// GetNetwork returns the people you've connected with through real exchanges,
+// most recent first. No followers, no vanity — only answered conversations.
+func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error) {
+	connections := make([]NetworkConnection, 0)
+	seen := make(map[uuid.UUID]bool)
+
+	// People who answered your asks.
+	var answered []model.Bridge
+	if err := s.db.Preload("RecommendedUser").Preload("Ask").
+		Where("requester_id = ? AND status = ?", userID, model.BridgeStatusResponded).
+		Order("updated_at DESC").
+		Find(&answered).Error; err != nil {
+		return nil, fmt.Errorf("failed to load answered bridges: %w", err)
+	}
+	for _, b := range answered {
+		if b.RecommendedUserID == userID || seen[b.RecommendedUserID] {
+			continue
+		}
+		seen[b.RecommendedUserID] = true
+		connections = append(connections, NetworkConnection{
+			User:      b.RecommendedUser,
+			Direction: "you_asked",
+			Topic:     b.Ask.Topic,
+			Question:  b.Ask.Question,
+			LastAt:    b.UpdatedAt,
+		})
+	}
+
+	// People whose asks you answered.
+	var answeredByMe []model.Bridge
+	if err := s.db.Preload("Ask.User").
+		Where("id IN (SELECT bridge_id FROM bridge_responses WHERE responder_id = ?)", userID).
+		Order("updated_at DESC").
+		Find(&answeredByMe).Error; err != nil {
+		return nil, fmt.Errorf("failed to load given responses: %w", err)
+	}
+	for _, b := range answeredByMe {
+		asker := b.Ask.User
+		if asker.ID == uuid.Nil || asker.ID == userID || seen[asker.ID] {
+			continue
+		}
+		seen[asker.ID] = true
+		connections = append(connections, NetworkConnection{
+			User:      asker,
+			Direction: "you_answered",
+			Topic:     b.Ask.Topic,
+			Question:  b.Ask.Question,
+			LastAt:    b.UpdatedAt,
+		})
+	}
+
+	sort.Slice(connections, func(i, j int) bool {
+		return connections[i].LastAt.After(connections[j].LastAt)
+	})
+	return connections, nil
 }
 
 func (s *AdviceService) ListHelpSessions(userID uuid.UUID) ([]model.HelpSession, error) {

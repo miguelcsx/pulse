@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -26,6 +27,31 @@ func (s *UserService) GetByID(id uuid.UUID) (*model.User, error) {
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 	return &user, nil
+}
+
+// Search finds people by handle or display name, excluding the viewer and
+// anyone in a block relationship with them. Exact-handle matches rank first.
+func (s *UserService) Search(viewerID uuid.UUID, query string, limit int) ([]model.User, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []model.User{}, nil
+	}
+	if limit <= 0 || limit > 25 {
+		limit = 25
+	}
+	pattern := "%" + strings.ToLower(query) + "%"
+
+	var users []model.User
+	if err := s.db.
+		Where("id <> ?", viewerID).
+		Where("LOWER(handle) LIKE ? OR LOWER(display_name) LIKE ?", pattern, pattern).
+		Where(`NOT EXISTS (SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = users.id) OR (blocked_id = ? AND blocker_id = users.id))`, viewerID, viewerID).
+		Order(gorm.Expr("LOWER(handle) = ? DESC, handle ASC", strings.ToLower(query))).
+		Limit(limit).
+		Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("failed to search users: %w", err)
+	}
+	return users, nil
 }
 
 // profileRow holds the result of the single combined profile query.

@@ -1,25 +1,38 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type {
+  AskVisibility,
   Bridge,
   DesiredHelpType,
   TodayResponse,
 } from "@pulse/drift/types";
-import { createAsk, getToday, respondBridge } from "../api/advice";
+import {
+  createAsk,
+  getToday,
+  respondBridge,
+  updateAskVisibility,
+} from "../api/advice";
 import BridgeCard from "../components/advice/BridgeCard";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useUiStore } from "../store/uiStore";
 
-const quickIntents: Array<{
-  type: DesiredHelpType;
+const quickIntents: Array<{ type: DesiredHelpType; label: string }> = [
+  { type: "advice", label: "Advice" },
+  { type: "peer", label: "Peer" },
+  { type: "mentor", label: "Mentor" },
+  { type: "feedback", label: "Feedback" },
+];
+
+const visibilityOptions: Array<{
+  value: AskVisibility;
   label: string;
   helper: string;
 }> = [
-  { type: "advice", label: "Advice", helper: "Lived context" },
-  { type: "peer", label: "Peer", helper: "Shared stage" },
-  { type: "mentor", label: "Mentor", helper: "Steps ahead" },
-  { type: "feedback", label: "Feedback", helper: "Fresh eyes" },
+  { value: "private", label: "Private", helper: "Only people Pulse routes it to" },
+  { value: "community", label: "Community", helper: "People whose context matches" },
+  { value: "public", label: "Public", helper: "Anyone — can join the Commons" },
 ];
 
 export default function Today() {
@@ -27,11 +40,13 @@ export default function Today() {
   const [data, setData] = useState<TodayResponse | null>(null);
   const [question, setQuestion] = useState("");
   const [helpType, setHelpType] = useState<DesiredHelpType>("advice");
+  const [visibility, setVisibility] = useState<AskVisibility>("community");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [responseDrafts, setResponseDrafts] = useState<Record<string, string>>(
     {},
   );
+  const [publishing, setPublishing] = useState(false);
   const addToast = useUiStore((s) => s.addToast);
 
   useEffect(() => {
@@ -61,7 +76,7 @@ export default function Today() {
         question: trimmed,
         desired_help_type: helpType,
         urgency: helpType === "peer" ? "soon" : "this_week",
-        visibility: "community",
+        visibility,
       });
       setQuestion("");
       setData((prev) => ({
@@ -72,7 +87,15 @@ export default function Today() {
         trust_profile: prev?.trust_profile,
         starter_prompts: prev?.starter_prompts ?? [],
       }));
-      addToast("Bridges found", "success");
+      const routed = res.bridges.filter(
+        (b) => b.status === "asked" || b.status === "responded",
+      ).length;
+      addToast(
+        routed > 0
+          ? `Routed to ${routed} ${routed === 1 ? "person" : "people"} who've lived this`
+          : "We're finding people who've lived this",
+        "success",
+      );
     } catch {
       addToast("Failed to create ask", "error");
     } finally {
@@ -112,6 +135,23 @@ export default function Today() {
     }
   }
 
+  async function handlePublish(anonymous: boolean) {
+    if (!data?.latest_ask) return;
+    setPublishing(true);
+    try {
+      const updated = await updateAskVisibility(data.latest_ask.id, {
+        visibility: "public",
+        anonymous,
+      });
+      setData((prev) => (prev ? { ...prev, latest_ask: updated } : prev));
+      addToast("Published to the Commons", "success");
+    } catch {
+      addToast("Failed to publish", "error");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -123,21 +163,29 @@ export default function Today() {
   const bridges = data?.bridges ?? [];
   const incomingBridges = data?.incoming_bridges ?? [];
   const starterPrompts = data?.starter_prompts ?? [];
+  const trustProfile = data?.trust_profile;
+  const latestAsk = data?.latest_ask;
+  const routedCount = bridges.filter(
+    (b) => b.status === "asked" || b.status === "responded",
+  ).length;
+  const answeredCount = bridges.filter((b) => (b.responses?.length ?? 0) > 0)
+    .length;
+  const isPublished = latestAsk?.visibility === "public";
 
   return (
     <div className="space-y-8 pb-4">
       {/* Hero */}
       <section className="pt-4">
         <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight">
-          Find a person who&rsquo;s
+          Ask a real person
           <br />
           <span className="text-[var(--color-text-muted)]">
-            lived what you&rsquo;re facing.
+            who&rsquo;s lived it.
           </span>
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
-          Ask for perspective or share moments. Pulse turns those signals into
-          bridges with people who share context, taste, or lived experience.
+          Write what you need perspective on. Pulse quietly routes it to people
+          who&rsquo;ve been there — their answer lands right here.
         </p>
       </section>
 
@@ -146,12 +194,12 @@ export default function Today() {
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
-          placeholder="What do you need perspective on?"
+          placeholder="What do you need a human perspective on?"
           className="min-h-20 w-full resize-none bg-transparent p-1 text-[15px] leading-relaxed outline-none placeholder:text-[var(--color-text-muted)]"
         />
 
         {/* Intent chips */}
-        <div className="flex gap-2 mt-1 mb-3">
+        <div className="mb-3 mt-1 flex gap-2">
           {quickIntents.map((intent) => (
             <button
               key={intent.type}
@@ -168,64 +216,150 @@ export default function Today() {
           ))}
         </div>
 
-        {/* Starters + submit */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex gap-2 overflow-x-auto">
-            {starterPrompts.slice(0, 2).map((prompt) => (
+        {/* Visibility selector */}
+        <div className="mb-3">
+          <div className="flex gap-1.5">
+            {visibilityOptions.map((opt) => (
               <button
-                key={prompt}
+                key={opt.value}
                 type="button"
-                onClick={() => setQuestion(prompt)}
-                className="shrink-0 rounded-full bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+                onClick={() => setVisibility(opt.value)}
+                className={`flex-1 rounded-[var(--radius-sm)] border px-2 py-1.5 text-center transition-all ${
+                  visibility === opt.value
+                    ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
+                    : "border-[var(--color-border)] hover:border-[var(--color-border-emphasis)]"
+                }`}
               >
-                {prompt}
+                <span className="block text-[12px] font-medium">
+                  {opt.label}
+                </span>
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">
+            {visibilityOptions.find((o) => o.value === visibility)?.helper}
+          </p>
+        </div>
+
+        <div className="flex items-center justify-end">
           <Button
             size="sm"
             variant="accent"
             onClick={handleSubmit}
             loading={submitting}
-            className="shrink-0"
           >
-            Find
+            Find people who&rsquo;ve lived this
           </Button>
         </div>
       </section>
 
-      {/* Current ask */}
-      {data?.latest_ask && (
-        <section className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-2">
-            Your ask
+      {/* Starter prompts — warm entry when there's no ask yet */}
+      {!latestAsk && starterPrompts.length > 0 && (
+        <section>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+            Not sure where to start?
           </p>
-          <p className="text-sm leading-relaxed">{data.latest_ask.question}</p>
-          {data.latest_ask.triage_summary && (
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-              {data.latest_ask.triage_summary}
+          <div className="flex flex-wrap gap-2">
+            {starterPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => setQuestion(prompt)}
+                className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-emphasis)] hover:text-[var(--color-text)]"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Your ask + routing status */}
+      {latestAsk && (
+        <section className="space-y-3">
+          <div className="rounded-[var(--radius-md)] bg-[var(--color-surface)] p-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              Your ask
             </p>
+            <p className="text-sm leading-relaxed">{latestAsk.question}</p>
+            <p className="mt-3 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+              {answeredCount > 0
+                ? `${answeredCount} ${answeredCount === 1 ? "person has" : "people have"} answered`
+                : routedCount > 0
+                  ? `Routed to ${routedCount} ${routedCount === 1 ? "person" : "people"} — their perspective lands here`
+                  : "Finding people who've lived this…"}
+            </p>
+          </div>
+
+          {/* Publish to Commons once answered */}
+          {answeredCount > 0 && !isPublished && (
+            <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border-emphasis)] p-4">
+              <p className="text-sm font-medium">Help the next person</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                Publish this ask and its perspectives to the Commons so others
+                facing the same thing can find it.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => handlePublish(true)}
+                  loading={publishing}
+                >
+                  Publish anonymously
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handlePublish(false)}
+                  disabled={publishing}
+                >
+                  Publish with my name
+                </Button>
+              </div>
+            </div>
+          )}
+          {isPublished && (
+            <Link
+              to="/commons"
+              className="flex items-center justify-between rounded-[var(--radius-md)] bg-[var(--color-accent-subtle)] px-4 py-3 text-sm font-medium text-[var(--color-accent)]"
+            >
+              <span>✓ Published to the Commons</span>
+              <span className="text-xs">View →</span>
+            </Link>
           )}
         </section>
       )}
 
-      {/* Incoming asks */}
+      {/* Bridges — the matched people + their answers */}
+      {bridges.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-[17px] font-semibold">People matched to you</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Routed automatically by lived experience. Reach more if you like.
+            </p>
+          </div>
+          {bridges.map((bridge) => (
+            <BridgeCard key={bridge.id} bridge={bridge} onUpdate={updateBridge} />
+          ))}
+        </section>
+      )}
+
+      {/* Asked of you — directed incoming only */}
       {incomingBridges.length > 0 && (
         <section className="space-y-3">
           <div>
-            <h2 className="text-[17px] font-semibold">
-              Perspectives you can add
-            </h2>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              These appear because someone&rsquo;s ask overlaps with your
-              moments, topics, or lived context.
+            <h2 className="text-[17px] font-semibold">Asked of you</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Pulse routed these here because you&rsquo;ve lived something close.
+              Share the one thing you&rsquo;d tell them.
             </p>
           </div>
           {incomingBridges.map((bridge) => {
             const asker = bridge.ask?.user;
-            const isResponded = bridge.status === "responded";
             const response = bridge.responses?.[0];
-
             return (
               <article
                 key={bridge.id}
@@ -236,23 +370,13 @@ export default function Today() {
                     {asker?.display_name?.[0] || asker?.handle?.[0] || "?"}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-semibold">
-                        {asker?.display_name || asker?.handle || "Someone"}
-                      </p>
-                      <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]">
-                        {bridge.bridge_type.replaceAll("_", " ")}
-                      </span>
-                    </div>
-                    {asker?.handle && (
-                      <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                        @{asker.handle}
-                      </p>
-                    )}
-                    <p className="mt-3 text-sm leading-relaxed">
+                    <p className="truncate text-sm font-semibold">
+                      {asker?.display_name || asker?.handle || "Someone"}
+                    </p>
+                    <p className="mt-2 text-sm leading-relaxed">
                       {bridge.ask?.question}
                     </p>
-                    <p className="mt-2 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                    <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
                       {bridge.reason}
                     </p>
                   </div>
@@ -276,20 +400,17 @@ export default function Today() {
                           [bridge.id]: e.target.value,
                         }))
                       }
-                      placeholder="Share the one thing you would tell them..."
+                      placeholder="Share the one thing you would tell them…"
                       maxLength={1200}
                       className="min-h-20 w-full resize-none rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] p-3 text-sm leading-relaxed outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)]"
                     />
                     <div className="flex justify-end">
                       <Button
                         size="sm"
-                        variant={isResponded ? "secondary" : "accent"}
+                        variant="accent"
                         onClick={() => handleRespond(bridge)}
-                        disabled={isResponded}
                       >
-                        {isResponded
-                          ? "Perspective offered"
-                          : "Offer perspective"}
+                        Offer perspective
                       </Button>
                     </div>
                   </div>
@@ -300,34 +421,58 @@ export default function Today() {
         </section>
       )}
 
-      {/* Bridges */}
-      {bridges.length > 0 && (
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-[17px] font-semibold">Bridges</h2>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              People matched by lived experience
-            </p>
-          </div>
-          {bridges.map((bridge) => (
-            <BridgeCard
-              key={bridge.id}
-              bridge={bridge}
-              onUpdate={updateBridge}
-            />
-          ))}
-        </section>
-      )}
-
-      {/* Empty state for bridges */}
-      {bridges.length === 0 && !data?.latest_ask && (
+      {/* First-run empty state */}
+      {bridges.length === 0 && !latestAsk && incomingBridges.length === 0 && (
         <section className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Ask a question above to find your first human bridges.
+            Ask your first question above. Pulse finds the people who&rsquo;ve
+            lived it — no feed to scroll, no audience to perform for.
           </p>
         </section>
       )}
 
+      {/* Offer help — the other side of the graph */}
+      <section>
+        {trustProfile ? (
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+                  You can help with
+                </p>
+                <p className="mt-1.5 text-sm font-medium leading-snug">
+                  {trustProfile.topics || "Add the topics you can speak to"}
+                </p>
+              </div>
+              <Link
+                to="/settings"
+                className="shrink-0 text-xs font-medium text-[var(--color-accent)] hover:underline"
+              >
+                Edit
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <Link
+            to="/settings"
+            className="group flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-dashed border-[var(--color-border-emphasis)] p-4 transition-colors hover:bg-[var(--color-bg-elevated)]"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Be someone others can reach</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                Tell Pulse what you&rsquo;ve lived through, and it&rsquo;ll route
+                the right people to you.
+              </p>
+            </div>
+            <span className="shrink-0 text-[var(--color-text-muted)] transition-colors group-hover:text-[var(--color-text)]">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </span>
+          </Link>
+        )}
+      </section>
     </div>
   );
 }

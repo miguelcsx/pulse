@@ -1,12 +1,26 @@
+import { useEffect, useState } from "react";
 import { useWsStore } from "../../store/wsStore";
 import { useAuthStore } from "../../store/authStore";
+
+// Only surface a disconnect after it has persisted this long, so brief
+// reconnects (dev HMR, network blips, tab focus changes) never flash a banner.
+const DISCONNECT_GRACE_MS = 4000;
 
 export default function ConnectionStatus() {
   const connected = useWsStore((s) => s.connected);
   const isAuthenticated = useAuthStore((s) => !!s.accessToken);
+  const [showBanner, setShowBanner] = useState(false);
 
-  // Only show disconnect banner when the user is logged in but WS is down
-  if (!isAuthenticated || connected) return null;
+  useEffect(() => {
+    if (!isAuthenticated || connected) {
+      setShowBanner(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowBanner(true), DISCONNECT_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [connected, isAuthenticated]);
+
+  if (!showBanner) return null;
 
   return (
     <div

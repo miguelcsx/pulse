@@ -170,8 +170,30 @@ export interface Ask {
   urgency: AskUrgency;
   desired_help_type: DesiredHelpType;
   visibility: AskVisibility;
+  anonymous: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface AskVisibilityInput {
+  visibility: AskVisibility;
+  anonymous: boolean;
+}
+
+// CommonsEntry — an answered ask published to the Commons. When the ask is
+// anonymous the backend strips the asker identity (user_id is the zero UUID).
+export interface CommonsEntry {
+  ask: Ask;
+  responses: BridgeResponse[];
+}
+
+// NetworkConnection — a person you've actually exchanged perspective with.
+export interface NetworkConnection {
+  user: User;
+  direction: "you_asked" | "you_answered";
+  topic: string;
+  question: string;
+  last_at: string;
 }
 
 export interface AskCreateInput {

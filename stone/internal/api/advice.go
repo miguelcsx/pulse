@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -119,6 +120,91 @@ func (s *Server) GetToday(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, today)
+}
+
+func (s *Server) ListCommons(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	cursor := c.Query("cursor")
+
+	limit := 20
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 50 {
+			limit = parsed
+		}
+	}
+
+	entries, nextCursor, hasMore, err := s.adviceService.ListCommons(userID, cursor, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load commons"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"items":       entries,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
+	})
+}
+
+func (s *Server) UpdateAskVisibility(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	askID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ask id"})
+		return
+	}
+
+	var req service.AskVisibilityInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ask, err := s.adviceService.UpdateAskVisibility(askID, userID, req)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, service.ErrAdviceNotFound) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, ask)
+}
+
+func (s *Server) AddPerspective(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	askID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ask id"})
+		return
+	}
+
+	var req service.BridgeActionInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	bridge, err := s.adviceService.AddPerspective(askID, userID, req.Message)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, service.ErrAdviceNotFound) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, bridge)
+}
+
+func (s *Server) GetNetwork(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	connections, err := s.adviceService.GetNetwork(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load network"})
+		return
+	}
+	c.JSON(http.StatusOK, connections)
 }
 
 func (s *Server) ListHelpSessions(c *gin.Context) {

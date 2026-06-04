@@ -12,10 +12,9 @@ import Spinner from "./components/ui/Spinner";
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
 const Today = lazy(() => import("./pages/Today"));
-const Feed = lazy(() => import("./pages/Feed"));
+const Commons = lazy(() => import("./pages/Commons"));
 const Upload = lazy(() => import("./pages/Upload"));
-const Discover = lazy(() => import("./pages/Discover"));
-const RoomView = lazy(() => import("./pages/RoomView"));
+const Network = lazy(() => import("./pages/Network"));
 const PathView = lazy(() => import("./pages/PathView"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -23,8 +22,29 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 function ProfileRedirect() {
   const user = useAuthStore((s) => s.user);
-  if (!user) return <Navigate to="/login" />;
-  return <Navigate to={`/profile/${user.id}`} replace />;
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const setUser = useAuthStore((s) => s.setUser);
+
+  useEffect(() => {
+    // Authenticated but the profile hasn't hydrated yet (e.g. after a
+    // token refresh where /me failed transiently). Fetch it instead of
+    // bouncing the user to the login screen.
+    if (!user && accessToken) {
+      getMe()
+        .then(setUser)
+        .catch(() => {});
+    }
+  }, [user, accessToken, setUser]);
+
+  if (user) return <Navigate to={`/profile/${user.id}`} replace />;
+  if (accessToken) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+  return <Navigate to="/login" />;
 }
 
 export default function App() {
@@ -115,14 +135,16 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route path="/" element={<Today />} />
-            <Route path="/moments" element={<Feed />} />
+            <Route path="/commons" element={<Commons />} />
             <Route path="/upload" element={<Upload />} />
-            <Route path="/discover" element={<Discover />} />
+            <Route path="/network" element={<Network />} />
             <Route path="/profile/me" element={<ProfileRedirect />} />
-            <Route path="/rooms/:id" element={<RoomView />} />
             <Route path="/paths/:id" element={<PathView />} />
             <Route path="/profile/:id" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
+            {/* Legacy routes → new surfaces */}
+            <Route path="/moments" element={<Navigate to="/commons" replace />} />
+            <Route path="/discover" element={<Navigate to="/network" replace />} />
           </Route>
         </Route>
         <Route path="*" element={<NotFound />} />

@@ -1,5 +1,12 @@
-import type { UserProfile } from "@pulse/drift/types";
+import type { User, UserProfile } from "@pulse/drift/types";
 import client from "./client";
+
+export async function searchUsers(query: string): Promise<User[]> {
+  const response = await client.get<User[]>("/users/search", {
+    params: { q: query },
+  });
+  return response.data;
+}
 
 export async function followUser(id: string): Promise<void> {
   await client.post(`/follow/${id}`);

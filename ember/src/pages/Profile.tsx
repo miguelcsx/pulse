@@ -231,12 +231,20 @@ export default function Profile() {
             />
           )}
           {isMe && (
-            <Link
-              to="/settings"
-              className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium hover:bg-[var(--color-surface-hover)] transition-colors"
-            >
-              Edit profile
-            </Link>
+            <>
+              <Link
+                to="/upload"
+                className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-bg)] hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                Share a moment
+              </Link>
+              <Link
+                to="/settings"
+                className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium hover:bg-[var(--color-surface-hover)] transition-colors"
+              >
+                Edit profile
+              </Link>
+            </>
           )}
         </div>
       </section>

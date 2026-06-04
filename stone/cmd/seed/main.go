@@ -85,13 +85,20 @@ type fixtureTrustProfile struct {
 }
 
 type fixtureAsk struct {
-	UserHandle      string `json:"user_handle"`
-	Question        string `json:"question"`
-	Topic           string `json:"topic"`
-	Urgency         string `json:"urgency"`
-	DesiredHelpType string `json:"desired_help_type"`
-	Visibility      string `json:"visibility"`
-	HoursAgo        int    `json:"hours_ago"`
+	UserHandle      string          `json:"user_handle"`
+	Question        string          `json:"question"`
+	Topic           string          `json:"topic"`
+	Urgency         string          `json:"urgency"`
+	DesiredHelpType string          `json:"desired_help_type"`
+	Visibility      string          `json:"visibility"`
+	HoursAgo        int             `json:"hours_ago"`
+	Anonymous       bool            `json:"anonymous"`
+	Answers         []fixtureAnswer `json:"answers"`
+}
+
+type fixtureAnswer struct {
+	ResponderHandle string `json:"responder_handle"`
+	Body            string `json:"body"`
 }
 
 type fixtureRoom struct {
@@ -490,6 +497,7 @@ func seedFromFixture(db *gorm.DB, cfg *config.Config, fixture *demoFixture) erro
 				Urgency:         strings.TrimSpace(entry.Urgency),
 				DesiredHelpType: strings.TrimSpace(entry.DesiredHelpType),
 				Visibility:      strings.TrimSpace(entry.Visibility),
+				Anonymous:       entry.Anonymous,
 				CreatedAt:       createdAt,
 				UpdatedAt:       createdAt,
 			}
@@ -506,6 +514,45 @@ func seedFromFixture(db *gorm.DB, cfg *config.Config, fixture *demoFixture) erro
 				Where("user_id = ? AND question = ?", user.ID, question).
 				FirstOrCreate(&ask).Error; err != nil {
 				return fmt.Errorf("failed to create ask for %q: %w", entry.UserHandle, err)
+			}
+
+			// Seed answers as responded bridges so the Commons has real,
+			// browsable ask↔answer pairs out of the box.
+			for _, answer := range entry.Answers {
+				responder, ok := userByHandle[strings.ToLower(strings.TrimSpace(answer.ResponderHandle))]
+				if !ok {
+					return fmt.Errorf("unknown answer responder_handle %q", answer.ResponderHandle)
+				}
+				body := strings.TrimSpace(answer.Body)
+				if body == "" {
+					continue
+				}
+				bridge := model.Bridge{
+					AskID:             ask.ID,
+					RequesterID:       ask.UserID,
+					RecommendedUserID: responder.ID,
+					Reason:            "Has lived experience close to this question.",
+					BridgeType:        model.BridgeTypeAdjacentPerspective,
+					Confidence:        0.6,
+					Status:            model.BridgeStatusResponded,
+				}
+				if err := tx.
+					Where("ask_id = ? AND recommended_user_id = ?", ask.ID, responder.ID).
+					FirstOrCreate(&bridge).Error; err != nil {
+					return fmt.Errorf("failed to seed bridge for ask: %w", err)
+				}
+				response := model.BridgeResponse{
+					BridgeID:    bridge.ID,
+					ResponderID: responder.ID,
+					Body:        body,
+					CreatedAt:   createdAt,
+					UpdatedAt:   createdAt,
+				}
+				if err := tx.
+					Where("bridge_id = ? AND responder_id = ?", bridge.ID, responder.ID).
+					FirstOrCreate(&response).Error; err != nil {
+					return fmt.Errorf("failed to seed bridge response: %w", err)
+				}
 			}
 		}
 

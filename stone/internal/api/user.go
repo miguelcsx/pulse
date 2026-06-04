@@ -42,6 +42,39 @@ func (s *Server) UpdateMe(c *gin.Context) {
 	c.JSON(http.StatusOK, toSelfUserResponse(user))
 }
 
+type publicUserResponse struct {
+	ID          string `json:"id"`
+	Handle      string `json:"handle"`
+	DisplayName string `json:"display_name"`
+	Bio         string `json:"bio"`
+	AvatarURL   string `json:"avatar_url"`
+	Location    string `json:"location"`
+}
+
+func (s *Server) SearchUsers(c *gin.Context) {
+	viewerID := middleware.GetUserID(c)
+	query := c.Query("q")
+
+	users, err := s.userService.Search(viewerID, query, 25)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search people"})
+		return
+	}
+
+	results := make([]publicUserResponse, len(users))
+	for i, u := range users {
+		results[i] = publicUserResponse{
+			ID:          u.ID.String(),
+			Handle:      u.Handle,
+			DisplayName: u.DisplayName,
+			Bio:         u.Bio,
+			AvatarURL:   u.AvatarURL,
+			Location:    u.Location,
+		}
+	}
+	c.JSON(http.StatusOK, results)
+}
+
 func (s *Server) GetUser(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
