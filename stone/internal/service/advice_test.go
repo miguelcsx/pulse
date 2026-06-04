@@ -30,3 +30,13 @@ func TestOverlapScoreHasSharedContext(t *testing.T) {
 		t.Fatalf("overlapScore() = %f, want positive score", got)
 	}
 }
+
+func TestCommonsResponsesConvertsNilToEmptySlice(t *testing.T) {
+	got := commonsResponses(nil)
+	if got == nil {
+		t.Fatal("commonsResponses(nil) returned nil, want empty slice")
+	}
+	if len(got) != 0 {
+		t.Fatalf("commonsResponses(nil) length = %d, want 0", len(got))
+	}
+}

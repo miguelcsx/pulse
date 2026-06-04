@@ -186,7 +186,7 @@ export interface AskVisibilityInput {
 // anonymous the backend strips the asker identity (user_id is the zero UUID).
 export interface CommonsEntry {
   ask: Ask;
-  responses: BridgeResponse[];
+  responses?: BridgeResponse[] | null;
 }
 
 // NetworkConnection — a person you've actually exchanged perspective with.

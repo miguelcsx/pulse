@@ -98,7 +98,8 @@ function MomentTile({
 }
 
 function CommonsCard({ entry }: { entry: CommonsEntry }) {
-  const { ask, responses } = entry;
+  const { ask } = entry;
+  const responses = entry.responses ?? [];
   const anonymous = ask.anonymous;
   const asker = ask.user;
   const [open, setOpen] = useState(false);
@@ -305,8 +306,12 @@ export default function Commons() {
     );
   }
 
-  const openEntries = entries.filter((entry) => entry.responses.length === 0);
-  const answeredEntries = entries.filter((entry) => entry.responses.length > 0);
+  const openEntries = entries.filter(
+    (entry) => (entry.responses?.length ?? 0) === 0,
+  );
+  const answeredEntries = entries.filter(
+    (entry) => (entry.responses?.length ?? 0) > 0,
+  );
 
   return (
     <div className="space-y-5 pb-4">
