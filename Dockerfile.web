@@ -1,4 +1,4 @@
-FROM node:25-bookworm AS build
+FROM node:24-bookworm AS build
 
 WORKDIR /src
 COPY drift/ts ./drift/ts

@@ -29,6 +29,7 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
   const addToast = useUiStore((s) => s.addToast);
 
   async function handleAsk() {
+    if (status === "asked" || status === "responded") return;
     setBusy(true);
     try {
       const updated = await askBridge(bridge.id);
@@ -105,11 +106,15 @@ export default function BridgeCard({ bridge, onUpdate }: Props) {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="accent" onClick={handleAsk} loading={busy}>
-          {status === "asked" || status === "responded"
-            ? "Requested"
-            : "Request perspective"}
-        </Button>
+        {status === "asked" || status === "responded" ? (
+          <span className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-accent-subtle)] px-3 py-1.5 text-[13px] font-medium text-[var(--color-accent)]">
+            {status === "responded" ? "Responded" : "Routed"}
+          </span>
+        ) : (
+          <Button size="sm" variant="accent" onClick={handleAsk} loading={busy}>
+            Route to them
+          </Button>
+        )}
         <Link
           to={`/profile/${user.id}`}
           className="inline-flex items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-3 py-1.5 text-[13px] font-medium hover:bg-[var(--color-surface-hover)] transition-colors"

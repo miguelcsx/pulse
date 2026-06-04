@@ -171,6 +171,9 @@ func (s *AuthService) DemoLogin(handle string) (*model.User, string, string, err
 				return nil, "", "", fmt.Errorf("failed to create demo user: %w", err)
 			}
 		}
+		if err := s.warmDemoUser(user.ID); err != nil {
+			return nil, "", "", fmt.Errorf("failed to warm demo graph: %w", err)
+		}
 	}
 
 	accessToken, refreshToken, err := s.generateTokens(user.ID)
@@ -179,6 +182,68 @@ func (s *AuthService) DemoLogin(handle string) (*model.User, string, string, err
 	}
 
 	return &user, accessToken, refreshToken, nil
+}
+
+func (s *AuthService) warmDemoUser(userID uuid.UUID) error {
+	handles := []string{"lunanova", "iris.analog", "marcelo.wav", "kai"}
+	var users []model.User
+	if err := s.db.Where("handle IN ?", handles).Find(&users).Error; err != nil {
+		return err
+	}
+	if len(users) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		profile := model.TrustProfile{
+			UserID:          userID,
+			Topics:          "creative direction, pricing, finding real audience",
+			LivedExperience: "Trying Pulse through moments, asks, and Commons.",
+			Availability:    "async",
+		}
+		if err := tx.Where("user_id = ?", userID).
+			Assign(map[string]any{
+				"topics":           profile.Topics,
+				"lived_experience": profile.LivedExperience,
+				"availability":     profile.Availability,
+				"updated_at":       now,
+			}).
+			FirstOrCreate(&profile).Error; err != nil {
+			return err
+		}
+
+		for i, seedUser := range users {
+			follow := model.Follow{
+				FollowerID: userID,
+				FolloweeID: seedUser.ID,
+				CreatedAt:  now.Add(time.Duration(-i) * time.Minute),
+			}
+			if err := tx.Where("follower_id = ? AND followee_id = ?", userID, seedUser.ID).
+				FirstOrCreate(&follow).Error; err != nil {
+				return err
+			}
+
+			edge := model.UserAffinityEdge{
+				UserID:       userID,
+				OtherUserID:  seedUser.ID,
+				Score7D:      0.72 - float64(i)*0.04,
+				Score30D:     0.62 - float64(i)*0.03,
+				LastSignalAt: now.Add(time.Duration(-i) * time.Minute),
+			}
+			if err := tx.Where("user_id = ? AND other_user_id = ?", userID, seedUser.ID).
+				Assign(map[string]any{
+					"score_7d":       edge.Score7D,
+					"score_30d":      edge.Score30D,
+					"last_signal_at": edge.LastSignalAt,
+					"updated_at":     now,
+				}).
+				FirstOrCreate(&edge).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // RefreshToken validates a refresh token and issues a new access/refresh token pair.

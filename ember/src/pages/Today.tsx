@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
+  AffinityFeedItem,
   AskVisibility,
   Bridge,
   DesiredHelpType,
+  FeedMoment,
   TodayResponse,
 } from "@pulse/drift/types";
 import {
@@ -12,7 +14,11 @@ import {
   respondBridge,
   updateAskVisibility,
 } from "../api/advice";
+import { getFeed } from "../api/content";
 import BridgeCard from "../components/advice/BridgeCard";
+import AskPathCard from "../components/feed/AskPathCard";
+import ContentModal from "../components/feed/ContentModal";
+import FeedCard from "../components/feed/FeedCard";
 import Button from "../components/ui/Button";
 import Spinner from "../components/ui/Spinner";
 import { usePageTitle } from "../hooks/usePageTitle";
@@ -38,6 +44,11 @@ const visibilityOptions: Array<{
 export default function Today() {
   usePageTitle("Today");
   const [data, setData] = useState<TodayResponse | null>(null);
+  const [pathItems, setPathItems] = useState<AffinityFeedItem[]>([]);
+  const [pathCursor, setPathCursor] = useState("");
+  const [pathHasMore, setPathHasMore] = useState(false);
+  const [pathLoadingMore, setPathLoadingMore] = useState(false);
+  const [selectedMoment, setSelectedMoment] = useState<FeedMoment | null>(null);
   const [question, setQuestion] = useState("");
   const [helpType, setHelpType] = useState<DesiredHelpType>("advice");
   const [visibility, setVisibility] = useState<AskVisibility>("community");
@@ -49,11 +60,25 @@ export default function Today() {
   const [publishing, setPublishing] = useState(false);
   const addToast = useUiStore((s) => s.addToast);
 
+  const loadPath = useCallback(
+    async (cursor?: string) => {
+      const res = await getFeed(cursor, 12);
+      setPathItems((prev) => (cursor ? [...prev, ...res.items] : res.items));
+      setPathCursor(res.next_cursor);
+      setPathHasMore(res.has_more);
+    },
+    [],
+  );
+
   useEffect(() => {
     let cancelled = false;
-    getToday()
-      .then((res) => {
-        if (!cancelled) setData(res);
+    Promise.all([getToday(), getFeed(undefined, 12)])
+      .then(([today, feed]) => {
+        if (cancelled) return;
+        setData(today);
+        setPathItems(feed.items);
+        setPathCursor(feed.next_cursor);
+        setPathHasMore(feed.has_more);
       })
       .catch(() => addToast("Failed to load Today", "error"))
       .finally(() => {
@@ -87,6 +112,7 @@ export default function Today() {
         trust_profile: prev?.trust_profile,
         starter_prompts: prev?.starter_prompts ?? [],
       }));
+      loadPath().catch(() => {});
       const routed = res.bridges.filter(
         (b) => b.status === "asked" || b.status === "responded",
       ).length;
@@ -116,6 +142,11 @@ export default function Today() {
             ),
           }
         : prev,
+    );
+    setPathItems((prev) =>
+      prev.map((item) =>
+        item.bridge?.id === updated.id ? { ...item, bridge: updated } : item,
+      ),
     );
   }
 
@@ -152,6 +183,18 @@ export default function Today() {
     }
   }
 
+  async function loadMorePath() {
+    if (pathLoadingMore || !pathHasMore || !pathCursor) return;
+    setPathLoadingMore(true);
+    try {
+      await loadPath(pathCursor);
+    } catch {
+      addToast("Failed to load more path items", "error");
+    } finally {
+      setPathLoadingMore(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">
@@ -177,20 +220,34 @@ export default function Today() {
       {/* Hero */}
       <section className="pt-4">
         <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight">
-          Ask a real person
+          Your affinity path
           <br />
           <span className="text-[var(--color-text-muted)]">
-            who&rsquo;s lived it.
+            through moments and people.
           </span>
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
-          Write what you need perspective on. Pulse quietly routes it to people
-          who&rsquo;ve been there — their answer lands right here.
+          Pulse routes the next useful thing: a moment, a person, or a question
+          where your context can help.
         </p>
       </section>
 
       {/* Ask box */}
       <section className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Need a human read?</p>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Ask once. Pulse routes it quietly.
+            </p>
+          </div>
+          <Link
+            to="/upload"
+            className="shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--color-surface-hover)]"
+          >
+            Share moment
+          </Link>
+        </div>
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -251,6 +308,70 @@ export default function Today() {
             Find people who&rsquo;ve lived this
           </Button>
         </div>
+      </section>
+
+      {/* Live affinity path */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-[17px] font-semibold">Next in your path</h2>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              Mixed by affinity, recency, and diversity — not popularity.
+            </p>
+          </div>
+          <Link
+            to="/commons"
+            className="shrink-0 text-xs font-medium text-[var(--color-accent)] hover:underline"
+          >
+            Commons
+          </Link>
+        </div>
+
+        {pathItems.length === 0 ? (
+          <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-6 text-center">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Your path is warming up. Share a tagged moment or ask for
+              perspective so Pulse can find stronger context.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pathItems.map((item) => {
+              const moment = item.content
+                ? { ...item.content, room_context: item.room_context }
+                : null;
+
+              return (
+                <Fragment key={`${item.unit_type}-${item.id}`}>
+                  {item.unit_type === "ask" && item.bridge ? (
+                    <AskPathCard
+                      bridge={item.bridge}
+                      onUpdate={updateBridge}
+                      compact
+                    />
+                  ) : moment ? (
+                    <FeedCard
+                      content={moment}
+                      onClick={() => setSelectedMoment(moment)}
+                    />
+                  ) : null}
+                </Fragment>
+              );
+            })}
+            {pathHasMore && (
+              <div className="flex justify-center pt-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={loadMorePath}
+                  loading={pathLoadingMore}
+                >
+                  Continue path
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Starter prompts — warm entry when there's no ask yet */}
@@ -473,6 +594,13 @@ export default function Today() {
           </Link>
         )}
       </section>
+
+      {selectedMoment && (
+        <ContentModal
+          content={selectedMoment}
+          onClose={() => setSelectedMoment(null)}
+        />
+      )}
     </div>
   );
 }

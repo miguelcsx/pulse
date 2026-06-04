@@ -118,6 +118,12 @@ function directionCopy(direction: NetworkConnection["direction"]): {
   if (direction === "you_asked") {
     return { label: "answered your ask", tone: "text-[var(--color-accent)]" };
   }
+  if (direction === "connected") {
+    return { label: "connected", tone: "text-[var(--color-text-secondary)]" };
+  }
+  if (direction === "nearby") {
+    return { label: "nearby", tone: "text-[var(--color-warning)]" };
+  }
   return { label: "you answered them", tone: "text-[var(--color-success)]" };
 }
 
@@ -158,8 +164,8 @@ export default function Network() {
       <section className="pt-4">
         <h1 className="text-[28px] font-semibold tracking-tight">Network</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Find anyone by handle, or revisit the people you&rsquo;ve exchanged
-          perspective with. No followers, no vanity — only real conversations.
+          People in your orbit: those you helped, those who helped you, people
+          you connected with, and close affinity matches.
         </p>
       </section>
 
@@ -172,8 +178,8 @@ export default function Network() {
         {connections.length === 0 ? (
           <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-8 text-center">
             <p className="text-sm text-[var(--color-text-muted)]">
-              Your network grows as people answer your asks — and as you answer
-              theirs.
+              Your network grows from moments, follows, reactions, asks, and
+              answered perspectives.
             </p>
             <Link
               to="/"

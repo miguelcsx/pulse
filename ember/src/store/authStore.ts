@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { User } from "@pulse/drift/types";
+import { JWT_STORAGE_KEY } from "@pulse/drift/constants";
 
 interface AuthState {
   accessToken: string | null;
@@ -11,7 +12,10 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
-  accessToken: null,
+  accessToken:
+    typeof localStorage === "undefined"
+      ? null
+      : localStorage.getItem(JWT_STORAGE_KEY),
   user: (() => {
     try {
       const raw = localStorage.getItem("pulse_user");
@@ -24,6 +28,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: () => get().accessToken !== null,
 
   setTokens: (accessToken) => {
+    localStorage.setItem(JWT_STORAGE_KEY, accessToken);
     set({ accessToken });
   },
 
@@ -34,6 +39,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   logout: () => {
     localStorage.removeItem("pulse_user");
+    localStorage.removeItem(JWT_STORAGE_KEY);
     set({ accessToken: null, user: null });
   },
 }));

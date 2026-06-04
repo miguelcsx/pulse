@@ -12,11 +12,10 @@ export default function ConnectionStatus() {
   const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated || connected) {
-      setShowBanner(false);
-      return;
-    }
-    const timer = setTimeout(() => setShowBanner(true), DISCONNECT_GRACE_MS);
+    const timer = setTimeout(
+      () => setShowBanner(isAuthenticated && !connected),
+      isAuthenticated && !connected ? DISCONNECT_GRACE_MS : 0,
+    );
     return () => clearTimeout(timer);
   }, [connected, isAuthenticated]);
 

@@ -404,9 +404,9 @@ type CommonsEntry struct {
 	Responses []model.BridgeResponse `json:"responses"`
 }
 
-// ListCommons returns public asks that have at least one answer, newest first.
-// This is the social surface: a growing library of lived perspectives, not a
-// broadcast timeline.
+// ListCommons returns public asks newest first. Answered asks become durable
+// lived perspective; unanswered asks remain visible so Commons never depends on
+// a private manual publish loop before the community can help.
 func (s *AdviceService) ListCommons(userID uuid.UUID, cursor string, limit int) ([]CommonsEntry, string, bool, error) {
 	if limit <= 0 {
 		limit = 20
@@ -428,11 +428,6 @@ func (s *AdviceService) ListCommons(userID uuid.UUID, cursor string, limit int) 
 	var asks []model.Ask
 	if err := s.db.Preload("User").
 		Where("visibility = ?", "public").
-		Where(`EXISTS (
-			SELECT 1 FROM bridge_responses br
-			JOIN bridges b ON b.id = br.bridge_id
-			WHERE b.ask_id = asks.id
-		)`).
 		Order("created_at DESC").
 		Limit(limit + 1).
 		Offset(offset).
@@ -467,9 +462,6 @@ func (s *AdviceService) ListCommons(userID uuid.UUID, cursor string, limit int) 
 	entries := make([]CommonsEntry, 0, len(asks))
 	for _, ask := range asks {
 		responses := responsesByAsk[ask.ID]
-		if len(responses) == 0 {
-			continue
-		}
 		if ask.Anonymous {
 			// Strip the asker's identity before it leaves the service.
 			ask.User = model.User{}
@@ -517,14 +509,15 @@ func (s *AdviceService) UpdateAskVisibility(askID, userID uuid.UUID, input AskVi
 // either they answered your ask, or you answered theirs.
 type NetworkConnection struct {
 	User      model.User `json:"user"`
-	Direction string     `json:"direction"` // "you_asked" | "you_answered"
+	Direction string     `json:"direction"` // "you_asked" | "you_answered" | "connected" | "nearby"
 	Topic     string     `json:"topic"`
 	Question  string     `json:"question"`
 	LastAt    time.Time  `json:"last_at"`
 }
 
 // GetNetwork returns the people you've connected with through real exchanges,
-// most recent first. No followers, no vanity — only answered conversations.
+// explicit follows, and implicit affinity. No vanity metrics — only context for
+// who is close and why they are easy to re-enter.
 func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error) {
 	connections := make([]NetworkConnection, 0)
 	seen := make(map[uuid.UUID]bool)
@@ -574,10 +567,88 @@ func (s *AdviceService) GetNetwork(userID uuid.UUID) ([]NetworkConnection, error
 		})
 	}
 
+	// People you intentionally connected with. They should not disappear just
+	// because they have not answered an ask yet.
+	var follows []model.Follow
+	if err := s.db.Preload("Followee").
+		Where("follower_id = ?", userID).
+		Order("created_at DESC").
+		Limit(20).
+		Find(&follows).Error; err != nil {
+		return nil, fmt.Errorf("failed to load followed people: %w", err)
+	}
+	for _, follow := range follows {
+		if follow.FolloweeID == userID || seen[follow.FolloweeID] {
+			continue
+		}
+		seen[follow.FolloweeID] = true
+		connections = append(connections, NetworkConnection{
+			User:      follow.Followee,
+			Direction: "connected",
+			Topic:     "connected",
+			Question:  s.latestUserContext(follow.FolloweeID),
+			LastAt:    follow.CreatedAt,
+		})
+	}
+
+	// High-affinity people you may not have followed or helped yet. This is the
+	// implicit graph surfacing itself as a path, not a follower count.
+	var edges []model.UserAffinityEdge
+	if err := s.db.Where("user_id = ? AND other_user_id <> ?", userID, userID).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = user_affinity_edges.other_user_id
+		)`, userID).
+		Where(`NOT EXISTS (
+			SELECT 1 FROM blocks WHERE blocked_id = ? AND blocker_id = user_affinity_edges.other_user_id
+		)`, userID).
+		Order("score_7d DESC, last_signal_at DESC").
+		Limit(12).
+		Find(&edges).Error; err != nil {
+		return nil, fmt.Errorf("failed to load affinity edges: %w", err)
+	}
+	for _, edge := range edges {
+		if edge.OtherUserID == userID || seen[edge.OtherUserID] {
+			continue
+		}
+		var user model.User
+		if err := s.db.First(&user, "id = ?", edge.OtherUserID).Error; err != nil {
+			continue
+		}
+		seen[edge.OtherUserID] = true
+		connections = append(connections, NetworkConnection{
+			User:      user,
+			Direction: "nearby",
+			Topic:     "nearby",
+			Question:  fmt.Sprintf("Close by recent moments and reactions · %.0f%% affinity", edge.Score7D*100),
+			LastAt:    edge.LastSignalAt,
+		})
+	}
+
 	sort.Slice(connections, func(i, j int) bool {
 		return connections[i].LastAt.After(connections[j].LastAt)
 	})
 	return connections, nil
+}
+
+func (s *AdviceService) latestUserContext(userID uuid.UUID) string {
+	var content model.Content
+	if err := s.db.Preload("Tags").
+		Where("creator_id = ?", userID).
+		Order("created_at DESC").
+		First(&content).Error; err != nil {
+		return "Connected through your graph"
+	}
+	tagNames := make([]string, 0, len(content.Tags))
+	for _, tag := range content.Tags {
+		tagNames = append(tagNames, "#"+tag.Name)
+	}
+	if len(tagNames) > 0 {
+		return "Recently around " + strings.Join(tagNames, " ")
+	}
+	if strings.TrimSpace(content.Body) != "" {
+		return content.Body
+	}
+	return "Recent moment in your graph"
 }
 
 func (s *AdviceService) ListHelpSessions(userID uuid.UUID) ([]model.HelpSession, error) {

@@ -82,6 +82,13 @@ jobs:
             -e "ssh -i ~/.ssh/lightsail" \
             stone/uploads/demo/ "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/home/${{ secrets.LIGHTSAIL_USER }}/pulse/stone/uploads/demo/"
 
+      - name: Hash demo seed data
+        run: |
+          {
+            sha256sum stone/internal/db/seed/demo/fixture.json
+            find stone/uploads/demo -type f -print0 | sort -z | xargs -0 sha256sum
+          } | sha256sum | awk '{print "DEMO_DATA_HASH="$1}' >> "$GITHUB_ENV"
+
       - name: Write deploy environment
         run: |
           cat > /tmp/pulse.env <<EOF
@@ -123,20 +130,25 @@ jobs:
           GHCR_TOKEN: ${{ github.token }}
           SEED_DEMO_DATA: ${{ secrets.SEED_DEMO_DATA }}
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" '
+          ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" \
+            "cat > /tmp/pulse-deploy.sh" <<'REMOTE_SCRIPT'
             set -eu
-            docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
             trap "docker logout ghcr.io >/dev/null 2>&1 || true" EXIT
             cd /home/${{ secrets.LIGHTSAIL_USER }}/pulse/deploy/lightsail
             docker compose pull postgres redis stone web
             docker compose --profile ops run --rm migrate
-            if [ "${SEED_DEMO_DATA:-false}" = "true" ] && [ ! -f .seeded ]; then
-              docker compose --profile ops run --rm seed
-              touch .seeded
+            if [ "${SEED_DEMO_DATA:-false}" = "true" ]; then
+              if [ ! -f .seeded.hash ] || [ "$(cat .seeded.hash)" != "${DEMO_DATA_HASH}" ]; then
+                docker compose --profile ops run --rm seed
+                printf '%s\n' "${DEMO_DATA_HASH}" > .seeded.hash
+              fi
             fi
             docker compose up -d stone web
             docker image prune -f >/dev/null 2>&1 || true
-          '
+          REMOTE_SCRIPT
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/lightsail "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" \
+            "SEED_DEMO_DATA='${SEED_DEMO_DATA:-false}' DEMO_DATA_HASH='${DEMO_DATA_HASH}' GHCR_ACTOR='${{ github.actor }}' bash /tmp/pulse-deploy.sh"
 
       - name: Health check
         run: |
