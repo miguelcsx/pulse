@@ -32,7 +32,7 @@ type UserProfile struct {
 	FollowerCount  int           `json:"follower_count"`
 	FollowingCount int           `json:"following_count"`
 	ContentCount   int           `json:"content_count"`
-	IsFollowing    bool          `json:"is_following,omitempty"`
-	IsBlocked      bool          `json:"is_blocked,omitempty"`
+	IsFollowing    bool          `json:"is_following"`
+	IsBlocked      bool          `json:"is_blocked"`
 	TrustProfile   *TrustProfile `json:"trust_profile,omitempty"`
 }

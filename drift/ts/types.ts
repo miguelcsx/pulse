@@ -15,8 +15,8 @@ export interface UserProfile extends User {
   follower_count: number;
   following_count: number;
   content_count: number;
-  is_following?: boolean;
-  is_blocked?: boolean;
+  is_following: boolean;
+  is_blocked: boolean;
   trust_profile?: TrustProfile;
 }
 

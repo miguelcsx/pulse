@@ -126,10 +126,16 @@ export default function Today() {
       {/* Hero */}
       <section className="pt-4">
         <h1 className="text-[28px] font-semibold leading-[1.15] tracking-tight">
-          Find someone who&rsquo;s
+          Find a person who&rsquo;s
           <br />
-          <span className="text-[var(--color-text-muted)]">lived your question.</span>
+          <span className="text-[var(--color-text-muted)]">
+            lived what you&rsquo;re facing.
+          </span>
         </h1>
+        <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Ask for perspective or share moments. Pulse turns those signals into
+          bridges with people who share context, taste, or lived experience.
+        </p>
       </section>
 
       {/* Ask box */}

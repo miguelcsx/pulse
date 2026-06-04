@@ -27,7 +27,10 @@ export default function FollowButton({
         setFollowing(true);
       }
     } catch {
-      addToast(following ? "Failed to unfollow" : "Failed to follow", "error");
+      addToast(
+        following ? "Failed to disconnect" : "Failed to connect",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -40,7 +43,7 @@ export default function FollowButton({
       loading={loading}
       onClick={handleClick}
     >
-      {following ? "Following" : "Follow"}
+      {following ? "Connected" : "Connect"}
     </Button>
   );
 }
